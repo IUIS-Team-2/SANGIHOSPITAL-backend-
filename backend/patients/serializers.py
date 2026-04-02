@@ -1,6 +1,12 @@
 from rest_framework import serializers
-from .models import Patient, Admission, MedicalHistory, Discharge, Service, Billing
 from django.db import transaction
+# 🌟 Make sure ServiceMaster is imported here!
+from .models import Patient, Admission, MedicalHistory, Discharge, Service, Billing, ServiceMaster
+
+class ServiceMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ServiceMaster
+        fields = '__all__'
 
 class MedicalHistorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -24,25 +30,6 @@ class BillingSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class AdmissionSerializer(serializers.ModelSerializer):
-    # These match the 'related_name' in our models.py!
-    medicalHistory = MedicalHistorySerializer(read_only=True)
-    discharge = DischargeSerializer(read_only=True)
-    services = ServiceSerializer(many=True, read_only=True)
-    billing = BillingSerializer(read_only=True)
-
-    class Meta:
-        model = Admission
-        fields = '__all__'
-
-class PatientSerializer(serializers.ModelSerializer):
-    # This grabs all admissions linked to this patient and nests them inside an 'admissions' array!
-    admissions = AdmissionSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = Patient
-        fields = '__all__'
-
-class AdmissionSerializer(serializers.ModelSerializer):
     medicalHistory = MedicalHistorySerializer(read_only=True)
     discharge = DischargeSerializer(read_only=True)
     services = ServiceSerializer(many=True, read_only=True)
@@ -59,23 +46,30 @@ class PatientSerializer(serializers.ModelSerializer):
         model = Patient
         fields = '__all__'
 
-    # 🌟 THE NEW SMART LOGIC 🌟
+    # 🌟 NEW: Duplicate Check Logic
+    def validate(self, data):
+        phone = data.get('phone')
+        national_id = data.get('nationalId')
+
+        # Check if a patient with this phone number already exists
+        if phone and Patient.objects.filter(phone=phone).exists():
+            raise serializers.ValidationError({"error": f"A patient with phone number {phone} is already registered."})
+        
+        # Check if a patient with this National ID already exists
+        if national_id and Patient.objects.filter(nationalId=national_id).exists():
+            raise serializers.ValidationError({"error": f"A patient with National ID {national_id} is already registered."})
+            
+        return data
+
     def create(self, validated_data):
-        # We use a 'transaction' so if the admission fails, the patient isn't created either.
-        # It's all or nothing—crucial for hospital data integrity!
         with transaction.atomic():
-            # 1. Create the Patient
             patient = Patient.objects.create(**validated_data)
 
-            # 2. Automatically create the first Admission (Adm #1)
-            # In Sangi Hospital, every new registration is an automatic admission.
             admission = Admission.objects.create(
                 patient=patient,
-                admNo=1  # First time registration is always Admission #1
+                admNo=1  
             )
 
-            # 3. Create the placeholder records so the frontend doesn't crash 
-            # when looking for 'medicalHistory' or 'billing'
             MedicalHistory.objects.create(admission=admission)
             Discharge.objects.create(admission=admission)
             Billing.objects.create(admission=admission)

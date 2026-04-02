@@ -1,10 +1,12 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import Patient, Admission
+from django.db import transaction  # 🌟 NEW: Needed for the new_admission action
+from .models import Patient, Admission, ServiceMaster  # 🌟 NEW: Added ServiceMaster
 from .serializers import (
     PatientSerializer, MedicalHistorySerializer, 
-    DischargeSerializer, ServiceSerializer, BillingSerializer
+    DischargeSerializer, ServiceSerializer, BillingSerializer,
+    ServiceMasterSerializer  # 🌟 NEW: Added ServiceMasterSerializer
 )
 
 class PatientViewSet(viewsets.ModelViewSet):
@@ -74,3 +76,31 @@ class PatientViewSet(viewsets.ModelViewSet):
             return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({'error': str(e)}, status=404)
+        
+    # 🌟 NEW: Start a new Admission for a returning patient
+    @action(detail=True, methods=['post'])
+    def new_admission(self, request, uhid=None):
+        patient = self.get_object()
+        
+        # Find the highest admission number and add 1
+        last_adm = patient.admissions.order_by('-admNo').first()
+        new_adm_no = (last_adm.admNo + 1) if last_adm else 1
+        
+        with transaction.atomic():
+            admission = Admission.objects.create(patient=patient, admNo=new_adm_no)
+            
+            MedicalHistory.objects.create(admission=admission)
+            Discharge.objects.create(admission=admission)
+            Billing.objects.create(admission=admission)
+            
+            return Response({
+                'status': f'New Admission #{new_adm_no} started successfully',
+                'uhid': patient.uhid,
+                'admNo': new_adm_no
+            })
+
+# 🌟 NEW: This serves the Excel/CSV Master Data to the frontend
+class ServiceMasterViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = ServiceMaster.objects.all()
+    serializer_class = ServiceMasterSerializer
+    pagination_class = None # We want to send all prices at once, no pages

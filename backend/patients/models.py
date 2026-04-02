@@ -97,3 +97,19 @@ class Billing(models.Model):
     admission = models.OneToOneField(Admission, related_name='billing', on_delete=models.CASCADE)
     paymentMode = models.CharField(max_length=50, blank=True)
     paidNow = models.BooleanField(default=False)    
+
+class ServiceMaster(models.Model):
+    CATEGORY_CHOICES = [
+        ('ICU CARE', 'ICU Care'),
+        ('ROOM CHARGE', 'Room Charge'),
+        ('CONSULTANT', 'Consultant'),
+        ('RADIOLOGY', 'Radiology'),
+        ('GENERAL SERVICES', 'General Services'),
+    ]
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
+    description = models.CharField(max_length=255)
+    code = models.CharField(max_length=50, blank=True)
+    rate = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"[{self.category}] {self.description}"

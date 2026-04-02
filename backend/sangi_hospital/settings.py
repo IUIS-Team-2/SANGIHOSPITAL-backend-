@@ -44,7 +44,6 @@ INSTALLED_APPS = [
     # Third-party apps
     'rest_framework',
     'corsheaders', # To allow React to talk to Django
-    # Local apps
     'core',
     'users',
     'patients',
@@ -88,10 +87,10 @@ WSGI_APPLICATION = 'sangi_hospital.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME'),
-        'USER': os.getenv('DB_USER'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST', 'localhost'), 
+        'NAME': os.getenv('DB_NAME', 'sangi_hospital'),
+        'USER': os.getenv('DB_USER', 'postgres'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'admin123'),
+        'HOST': os.getenv('DB_HOST', '127.0.0.1'),  # 🌟 Changed this to 127.0.0.1
         'PORT': os.getenv('DB_PORT', '5432'),      
     }
 }
@@ -141,6 +140,4 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000", 
-]
+CORS_ALLOW_ALL_ORIGINS = True
