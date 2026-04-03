@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+import datetime
 
 class Patient(models.Model):
     # Branch tracking
@@ -52,16 +53,46 @@ class Patient(models.Model):
         return f"{self.uhid} - {self.patientName}"
 
 class Admission(models.Model):
-    # The related_name='admissions' is the magic keyword that lets React find this inside the Patient object!
-    patient = models.ForeignKey(Patient, related_name='admissions', on_delete=models.CASCADE)
+    # The related_name='admissions' lets React find this inside the Patient object!
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='admissions')
+    ipdNo = models.CharField(max_length=50, unique=True, blank=True)
     admNo = models.PositiveIntegerField()
-    dateTime = models.DateTimeField(default=timezone.now) # Date of Admission
+    dateTime = models.DateTimeField(default=timezone.now) 
     
     class Meta:
-        unique_together = ('patient', 'admNo') # A patient can't have two Admission #1s
+        unique_together = ('patient', 'admNo') 
 
     def __str__(self):
-        return f"{self.patient.uhid} - Adm #{self.admNo}"
+        return f"{self.patient.uhid} - Adm #{self.admNo} ({self.ipdNo})"
+
+    # 🌟 THE LOGIC: Auto-generate SH/GEN/26/1001 format
+    def save(self, *args, **kwargs):
+        if not self.ipdNo:
+            # 1. Get the current year shorthand (e.g., '26' for 2026)
+            year = datetime.datetime.now().strftime('%y')
+            prefix = f"SH/GEN/{year}/"
+            
+            # 2. Find the highest existing IPD number for THIS year
+            last_admission = Admission.objects.filter(
+                ipdNo__startswith=prefix
+            ).order_by('-ipdNo').first()
+            
+            if last_admission:
+                try:
+                    # Extract the last part (the number), convert to int, and add 1
+                    last_sequence = int(last_admission.ipdNo.split('/')[-1])
+                    new_sequence = last_sequence + 1
+                except (ValueError, IndexError):
+                    # Fallback if string splitting fails for some reason
+                    new_sequence = 1001
+            else:
+                # First admission of the year starts at 1001
+                new_sequence = 1001
+                
+            # 3. Combine them: SH/GEN/26/1001
+            self.ipdNo = f"{prefix}{new_sequence}"
+            
+        super().save(*args, **kwargs)
 
 class MedicalHistory(models.Model):
     # One Admission has exactly One Medical History record
@@ -96,7 +127,9 @@ class Service(models.Model):
 class Billing(models.Model):
     admission = models.OneToOneField(Admission, related_name='billing', on_delete=models.CASCADE)
     paymentMode = models.CharField(max_length=50, blank=True)
-    paidNow = models.BooleanField(default=False)    
+    paidNow = models.BooleanField(default=False)  
+    printStatus = models.CharField(max_length=50, default='DRAFT') 
+    printRequestedAt = models.DateTimeField(null=True, blank=True)  
 
 class ServiceMaster(models.Model):
     CATEGORY_CHOICES = [

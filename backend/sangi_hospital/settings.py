@@ -87,11 +87,11 @@ WSGI_APPLICATION = 'sangi_hospital.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'sangi_hospital'),
-        'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'admin123'),
-        'HOST': os.getenv('DB_HOST', '127.0.0.1'),  # 🌟 Changed this to 127.0.0.1
-        'PORT': os.getenv('DB_PORT', '5432'),      
+        'NAME': os.getenv('DB_NAME'),
+        'USER': os.getenv('DB_USER'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
+        'HOST': os.getenv('DB_HOST'),
+        'PORT': os.getenv('DB_PORT'),
     }
 }
 
@@ -100,7 +100,7 @@ DATABASES = {
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
 # 2. Tell Django to use your Custom User Model
-AUTH_USER_MODEL = 'users.User'
+AUTH_USER_MODEL = 'users.HospitalUser'
 
 AUTH_PASSWORD_VALIDATORS = [
     {

@@ -21,9 +21,39 @@ class DischargeSerializer(serializers.ModelSerializer):
 class ServiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Service
-        fields = '__all__'
-        read_only_fields = ['admission']
+        fields = ['id', 'svcName', 'svcCat', 'svcDate', 'svcQty', 'svcRate', 'svcTot']
 
+    def to_internal_value(self, data):
+        resource_data = data.copy()
+
+        # 1. Map Name (React sends 'title')
+        if 'title' in resource_data and not resource_data.get('svcName'):
+            resource_data['svcName'] = resource_data['title']
+            
+        # 2. Map Category (React sends 'type')
+        if 'type' in resource_data and not resource_data.get('svcCat'):
+            resource_data['svcCat'] = resource_data['type']
+
+        # 3. Map Rate (React sends 'rate')
+        if 'rate' in resource_data and not resource_data.get('svcRate'):
+            resource_data['svcRate'] = resource_data['rate']
+
+        # 4. Map Quantity (React sends 'qty')
+        if 'qty' in resource_data and not resource_data.get('svcQty'):
+            resource_data['svcQty'] = resource_data['qty']
+
+        # 5. AUTO-CALCULATE TOTAL! (Since React forgot to send it)
+        if not resource_data.get('svcTot'):
+            try:
+                rate = float(resource_data.get('svcRate', 0))
+                qty = int(resource_data.get('svcQty', 1))
+                resource_data['svcTot'] = rate * qty
+            except (ValueError, TypeError):
+                resource_data['svcTot'] = 0
+
+        return super().to_internal_value(resource_data)
+    
+    
 class BillingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Billing
@@ -46,32 +76,43 @@ class PatientSerializer(serializers.ModelSerializer):
         model = Patient
         fields = '__all__'
 
-    # 🌟 NEW: Duplicate Check Logic
-    def validate(self, data):
-        phone = data.get('phone')
-        national_id = data.get('nationalId')
-
-        # Check if a patient with this phone number already exists
-        if phone and Patient.objects.filter(phone=phone).exists():
-            raise serializers.ValidationError({"error": f"A patient with phone number {phone} is already registered."})
+    # 🌟 THE BACKEND SANITIZER
+    # This catches empty strings ("") from React and turns them into None (null)
+    def to_internal_value(self, data):
+        # List of all Date fields that might come in as empty strings
+        date_fields = ['dob', 'tpaValidity', 'tpaPanelValidity']
         
-        # Check if a patient with this National ID already exists
-        if national_id and Patient.objects.filter(nationalId=national_id).exists():
-            raise serializers.ValidationError({"error": f"A patient with National ID {national_id} is already registered."})
-            
+        # We create a copy so we don't mutate the original request data unexpectedly
+        resource_data = data.copy()
+        
+        for field in date_fields:
+            if resource_data.get(field) == "":
+                resource_data[field] = None
+                
+        return super().to_internal_value(resource_data)
+
+    def validate(self, data):
+        # 🌟 Get the ID of the current patient if we are doing an UPDATE
+        current_patient_id = self.instance.id if self.instance else None
+
+        # 1. Check for Duplicate Phone Number
+        phone = data.get('phone')
+        if phone:
+            phone_query = Patient.objects.filter(phone=phone)
+            if current_patient_id:
+                phone_query = phone_query.exclude(id=current_patient_id) # Ignore themselves!
+                
+            if phone_query.exists():
+                raise serializers.ValidationError({"error": f"A patient with phone number {phone} is already registered."})
+
+        # 2. Check for Duplicate National ID (Aadhar/PAN)
+        national_id = data.get('nationalId')
+        if national_id:
+            id_query = Patient.objects.filter(nationalId=national_id)
+            if current_patient_id:
+                id_query = id_query.exclude(id=current_patient_id) # Ignore themselves!
+                
+            if id_query.exists():
+                raise serializers.ValidationError({"error": f"A patient with National ID {national_id} is already registered."})
+
         return data
-
-    def create(self, validated_data):
-        with transaction.atomic():
-            patient = Patient.objects.create(**validated_data)
-
-            admission = Admission.objects.create(
-                patient=patient,
-                admNo=1  
-            )
-
-            MedicalHistory.objects.create(admission=admission)
-            Discharge.objects.create(admission=admission)
-            Billing.objects.create(admission=admission)
-
-            return patient

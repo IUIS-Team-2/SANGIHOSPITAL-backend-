@@ -2,7 +2,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
-class User(AbstractUser):
+class HospitalUser(AbstractUser):
     BRANCH_CHOICES = [
         ('LNM', 'Laxmi Nagar'),
         ('RYM', 'Raya'),
