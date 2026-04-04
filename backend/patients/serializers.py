@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.db import transaction
-# 🌟 Make sure ServiceMaster is imported here!
+from django.utils import timezone
 from .models import Patient, Admission, MedicalHistory, Discharge, Service, Billing, ServiceMaster
 
 class ServiceMasterSerializer(serializers.ModelSerializer):
@@ -17,39 +17,57 @@ class DischargeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Discharge
         fields = '__all__'
+        
+    # 🌟 DOA FORMATTER: Sends exact local time to React to prevent disappearing dates
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.admission and instance.admission.dateTime:
+            local_dt = timezone.localtime(instance.admission.dateTime)
+            data['doa'] = local_dt.strftime('%Y-%m-%dT%H:%M')
+        return data
 
 class ServiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Service
         fields = ['id', 'svcName', 'svcCat', 'svcDate', 'svcQty', 'svcRate', 'svcTot']
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['title'] = data.get('svcName')
+        data['type'] = data.get('svcCat')
+        data['rate'] = data.get('svcRate')
+        data['qty'] = data.get('svcQty')
+        data['total'] = data.get('svcTot')
+        return data
+
     def to_internal_value(self, data):
         resource_data = data.copy()
 
-        # 1. Map Name (React sends 'title')
         if 'title' in resource_data and not resource_data.get('svcName'):
             resource_data['svcName'] = resource_data['title']
-            
-        # 2. Map Category (React sends 'type')
         if 'type' in resource_data and not resource_data.get('svcCat'):
             resource_data['svcCat'] = resource_data['type']
+        if 'date' in resource_data and not resource_data.get('svcDate'):
+            resource_data['svcDate'] = resource_data['date']
 
-        # 3. Map Rate (React sends 'rate')
-        if 'rate' in resource_data and not resource_data.get('svcRate'):
-            resource_data['svcRate'] = resource_data['rate']
+        # 🌟 THE 1311 FIX: Stop empty dates and blank titles from crashing Django!
+        if resource_data.get('svcDate') == "":
+            resource_data['svcDate'] = None
+        if not resource_data.get('svcName') or str(resource_data.get('svcName')).strip() == "":
+            resource_data['svcName'] = "Service Charge" # Safe fallback
 
-        # 4. Map Quantity (React sends 'qty')
-        if 'qty' in resource_data and not resource_data.get('svcQty'):
-            resource_data['svcQty'] = resource_data['qty']
-
-        # 5. AUTO-CALCULATE TOTAL! (Since React forgot to send it)
-        if not resource_data.get('svcTot'):
-            try:
-                rate = float(resource_data.get('svcRate', 0))
-                qty = int(resource_data.get('svcQty', 1))
-                resource_data['svcTot'] = rate * qty
-            except (ValueError, TypeError):
-                resource_data['svcTot'] = 0
+        try:
+            raw_rate = resource_data.get('svcRate') or resource_data.get('rate') or 0
+            raw_qty = resource_data.get('svcQty') or resource_data.get('qty') or 1
+            rate = float(raw_rate)
+            qty = int(raw_qty)
+            resource_data['svcRate'] = rate
+            resource_data['svcQty'] = qty
+            resource_data['svcTot'] = rate * qty
+        except (ValueError, TypeError):
+            resource_data['svcRate'] = 0
+            resource_data['svcQty'] = 1
+            resource_data['svcTot'] = 0
 
         return super().to_internal_value(resource_data)
     
@@ -68,6 +86,14 @@ class AdmissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Admission
         fields = '__all__'
+        
+    # 🌟 DOA FORMATTER: Formats the core Admission time so history clicks work flawlessly!
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.dateTime:
+            local_dt = timezone.localtime(instance.dateTime)
+            data['dateTime'] = local_dt.strftime('%Y-%m-%dT%H:%M')
+        return data
 
 class PatientSerializer(serializers.ModelSerializer):
     admissions = AdmissionSerializer(many=True, read_only=True)

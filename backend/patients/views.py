@@ -26,30 +26,24 @@ class PatientViewSet(viewsets.ModelViewSet):
     queryset = Patient.objects.all().order_by('-created_at')
     serializer_class = PatientSerializer
     lookup_field = 'uhid'
-    
-    # 🌟 THE SECRET SAUCE: This tells Django that UHIDs can contain dashes!
     lookup_value_regex = '[^/]+' 
 
-    # ==========================================
-    # 🌟 THE BACKEND FIX: Auto-Create Admission
-    # ==========================================
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+        data = request.data.copy()
+        
+        if 'locId' in data:
+            data['branch_location'] = 'RYM' if data['locId'] == 'raya' else 'LNM'
+            
+        serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         patient = serializer.instance 
 
         try:
-            # 🌟 Let models.py handle the IPD Number auto-generation!
-            Admission.objects.create(
-                patient=patient, 
-                admNo=1
-            )
-            
+            Admission.objects.create(patient=patient, admNo=1)
             response_serializer = self.get_serializer(patient)
             headers = self.get_success_headers(response_serializer.data)
             return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-            
         except Exception as e:
             print("🚨 AUTO-ADMISSION FAILED:", str(e))
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -57,21 +51,22 @@ class PatientViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'])
     def update_medical(self, request, uhid=None):
         patient = self.get_object()
-        adm_no = request.data.get('admNo')
+        adm_no = request.data.get('admNo') or 1
         medical_data = request.data.get('medicalData', {})
         
         try:
-            # 🌟 Grab the ACTUAL OBJECT from the database
-            admission_obj = patient.admissions.get(admNo=adm_no)
+            # 🌟 FIX 1: Safely get or create the Admission (Fixes your 52-byte ghost patient error)
+            admission_obj, _ = Admission.objects.get_or_create(patient=patient, admNo=adm_no)
             
-            # 🌟 Pass the OBJECT, not the number!
-            if not hasattr(admission_obj, 'medicalHistory'):
-                MedicalHistory.objects.create(admission=admission_obj)
+            # 🌟 FIX 2: get_or_create bypasses the hidden Django OneToOne Cache Trap!
+            med_hist, _ = MedicalHistory.objects.get_or_create(admission=admission_obj)
                 
             for key, value in medical_data.items():
-                setattr(admission_obj.medicalHistory, key, value)
+                if key in ['id', 'admission']:
+                    continue
+                setattr(med_hist, key, value)
                 
-            admission_obj.medicalHistory.save()
+            med_hist.save()
             return Response({'status': 'Medical history updated successfully'})
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -79,78 +74,66 @@ class PatientViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'])
     def discharge(self, request, uhid=None):
         patient = self.get_object()
-        adm_no = request.data.get('admNo')
+        adm_no = request.data.get('admNo') or 1
         discharge_data = request.data.get('dischargeData', {})
         
         try:
-            admission_obj = patient.admissions.get(admNo=adm_no)
-            
-            if not hasattr(admission_obj, 'discharge'):
-                Discharge.objects.create(admission=admission_obj)
+            admission_obj, _ = Admission.objects.get_or_create(patient=patient, admNo=adm_no)
+            discharge_obj, _ = Discharge.objects.get_or_create(admission=admission_obj)
                 
             for key, value in discharge_data.items():
-                # 🌟 THE FIX: Ignore relational keys sent by React!
-                if key in ['id', 'admission']:
+                if key in ['id', 'admission']: 
                     continue
-                    
                 if key in ['dod', 'expectedDod', 'actualDod'] and value == "":
                     value = None
-                setattr(admission_obj.discharge, key, value)
+                setattr(discharge_obj, key, value)
                 
-            admission_obj.discharge.save()
+            discharge_obj.save()
             return Response({'status': 'Discharge updated successfully'})
-            
         except Exception as e:
-            print(f"🚨 DISCHARGE ERROR: {str(e)}")
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
     @action(detail=True, methods=['patch'])
     def update_billing(self, request, uhid=None):
         patient = self.get_object()
-        adm_no = request.data.get('admNo')
+        adm_no = request.data.get('admNo') or 1
         billing_data = request.data.get('billingData', {})
         
         try:
-            admission_obj = patient.admissions.get(admNo=adm_no)
-            
-            if not hasattr(admission_obj, 'billing'):
-                Billing.objects.create(admission=admission_obj)
+            admission_obj, _ = Admission.objects.get_or_create(patient=patient, admNo=adm_no)
+            billing_obj, _ = Billing.objects.get_or_create(admission=admission_obj)
                 
             for key, value in billing_data.items():
-                if key in ['id', 'admission']:
+                if key in ['id', 'admission']: 
                     continue
                     
-                # 🌟 THE FIX: The Boolean Sanitizer
-                # If React sends an empty string for the checkbox, force it to Python False!
                 if key == 'paidNow' and value == "":
                     value = False
-                # Just in case React sends string "true"/"false" instead of boolean True/False
                 elif key == 'paidNow' and isinstance(value, str):
                     value = value.lower() == "true"
                     
-                setattr(admission_obj.billing, key, value)
+                setattr(billing_obj, key, value)
                 
-            admission_obj.billing.save()
+            billing_obj.save()
             return Response({'status': 'Billing updated successfully'})
-            
         except Exception as e:
-            print(f"🚨 BILLING ERROR: {str(e)}") 
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
     @action(detail=True, methods=['post'])
     def add_service(self, request, uhid=None):
         patient = self.get_object()
-        adm_no = request.data.get('admNo')
+        adm_no = request.data.get('admNo') or 1
         service_data = request.data.get('serviceData')
+        
         try:
-            admission = patient.admissions.get(admNo=adm_no)
+            admission_obj, _ = Admission.objects.get_or_create(patient=patient, admNo=adm_no)
             ser = ServiceSerializer(data=service_data)
             if ser.is_valid():
-                ser.save(admission=admission)
+                ser.save(admission=admission_obj)
                 return Response({'status': 'Service added', 'data': ser.data})
             return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({'error': str(e)}, status=404)
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
     @action(detail=True, methods=['post'])
     def new_admission(self, request, uhid=None): 
