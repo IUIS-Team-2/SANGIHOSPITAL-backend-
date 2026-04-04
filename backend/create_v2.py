@@ -2,11 +2,10 @@ import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 try:
-    # Notice we are connecting to port 5433!
     conn = psycopg2.connect(
         dbname='postgres', 
         user='postgres', 
-        password='admin123', # 👈 Make sure this is your DB password
+        password='admin123', 
         host='127.0.0.1',
         port='5433' 
     )
