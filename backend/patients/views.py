@@ -55,10 +55,7 @@ class PatientViewSet(viewsets.ModelViewSet):
         medical_data = request.data.get('medicalData', {})
         
         try:
-            # 🌟 FIX 1: Safely get or create the Admission (Fixes your 52-byte ghost patient error)
             admission_obj, _ = Admission.objects.get_or_create(patient=patient, admNo=adm_no)
-            
-            # 🌟 FIX 2: get_or_create bypasses the hidden Django OneToOne Cache Trap!
             med_hist, _ = MedicalHistory.objects.get_or_create(admission=admission_obj)
                 
             for key, value in medical_data.items():
@@ -104,7 +101,8 @@ class PatientViewSet(viewsets.ModelViewSet):
             billing_obj, _ = Billing.objects.get_or_create(admission=admission_obj)
                 
             for key, value in billing_data.items():
-                if key in ['id', 'admission']: 
+                # 🌟 PROTECT STATUS: Ignore printStatus so staff saves don't overwrite Admin approvals!
+                if key in ['id', 'admission', 'printStatus', 'printRequestedAt']: 
                     continue
                     
                 if key == 'paidNow' and value == "":
@@ -118,7 +116,7 @@ class PatientViewSet(viewsets.ModelViewSet):
             return Response({'status': 'Billing updated successfully'})
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
+    
     @action(detail=True, methods=['post'])
     def add_service(self, request, uhid=None):
         patient = self.get_object()
@@ -128,9 +126,23 @@ class PatientViewSet(viewsets.ModelViewSet):
         try:
             admission_obj, _ = Admission.objects.get_or_create(patient=patient, admNo=adm_no)
             ser = ServiceSerializer(data=service_data)
+            
             if ser.is_valid():
-                ser.save(admission=admission_obj)
-                return Response({'status': 'Service added', 'data': ser.data})
+                svc_name = ser.validated_data.get('svcName', 'Service Charge')
+                svc_cat = ser.validated_data.get('svcCat', '')
+                
+                service, created = Service.objects.update_or_create(
+                    admission=admission_obj,
+                    svcName=svc_name,  
+                    svcCat=svc_cat,    
+                    defaults={
+                        'svcQty': ser.validated_data.get('svcQty', 1),
+                        'svcRate': ser.validated_data.get('svcRate', 0),
+                        'svcTot': ser.validated_data.get('svcTot', 0),
+                        'svcDate': ser.validated_data.get('svcDate')
+                    }
+                )
+                return Response({'status': 'Service saved successfully', 'data': ServiceSerializer(service).data})
             return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -181,11 +193,6 @@ class PatientViewSet(viewsets.ModelViewSet):
             print("🚨 DOD ERROR:", str(e))
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    # ==========================================
-    # 🌟 PHASE 2: Print Request Workflow
-    # ==========================================
-    
-    # 1. Branch requests permission to print
     @action(detail=True, methods=['post'])
     def request_print(self, request, uhid=None):
         patient = self.get_object()
@@ -193,6 +200,11 @@ class PatientViewSet(viewsets.ModelViewSet):
         
         try:
             admission = patient.admissions.get(admNo=adm_no)
+            
+            # 🌟 SMART CHECK: Prevent resetting an already approved bill back to PENDING!
+            if hasattr(admission, 'billing') and admission.billing.printStatus == 'APPROVED':
+                return Response({'status': 'Already approved'})
+                
             if not hasattr(admission, 'billing'):
                 Billing.objects.create(admission=admission)
                 
@@ -203,34 +215,33 @@ class PatientViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    # 2. Super Admin approves or rejects the print
     @action(detail=True, methods=['post'])
     def resolve_print(self, request, uhid=None):
         patient = self.get_object()
         adm_no = request.data.get('admNo')
-        action = request.data.get('action') # Should be 'APPROVED' or 'REJECTED'
+        
+        action = request.data.get('action') or request.data.get('status') or request.data.get('backendAction') or 'APPROVED'
         
         try:
             admission = patient.admissions.get(admNo=adm_no)
-            admission.billing.printStatus = action
-            admission.billing.save()
+            if hasattr(admission, 'billing'):
+                admission.billing.printStatus = action
+                admission.billing.save()
+            else:
+                Billing.objects.create(admission=admission, printStatus=action)
+                
             return Response({'status': f'Print request {action}'})
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    # 3. Super Admin Dashboard fetches all pending requests across all branches
     @action(detail=False, methods=['get'])
     def pending_prints(self, request):
-        # Find all patients who have an admission with a 'PENDING' billing status
         pending_patients = Patient.objects.filter(admissions__billing__printStatus='PENDING').distinct()
         
-        # We reuse your existing serializer to send the full patient objects back
         serializer = self.get_serializer(pending_patients, many=True)
         return Response(serializer.data)
     
-    
-# 🌟 NEW: This serves the Excel/CSV Master Data to the frontend
 class ServiceMasterViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ServiceMaster.objects.all()
     serializer_class = ServiceMasterSerializer
-    pagination_class = None # We want to send all prices at once, no pages
+    pagination_class = None 

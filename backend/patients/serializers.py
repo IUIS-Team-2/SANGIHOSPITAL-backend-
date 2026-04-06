@@ -17,8 +17,7 @@ class DischargeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Discharge
         fields = '__all__'
-        
-    # 🌟 DOA FORMATTER: Sends exact local time to React to prevent disappearing dates
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         if instance.admission and instance.admission.dateTime:
@@ -50,11 +49,10 @@ class ServiceSerializer(serializers.ModelSerializer):
         if 'date' in resource_data and not resource_data.get('svcDate'):
             resource_data['svcDate'] = resource_data['date']
 
-        # 🌟 THE 1311 FIX: Stop empty dates and blank titles from crashing Django!
         if resource_data.get('svcDate') == "":
             resource_data['svcDate'] = None
         if not resource_data.get('svcName') or str(resource_data.get('svcName')).strip() == "":
-            resource_data['svcName'] = "Service Charge" # Safe fallback
+            resource_data['svcName'] = "Service Charge" 
 
         try:
             raw_rate = resource_data.get('svcRate') or resource_data.get('rate') or 0
@@ -87,7 +85,6 @@ class AdmissionSerializer(serializers.ModelSerializer):
         model = Admission
         fields = '__all__'
         
-    # 🌟 DOA FORMATTER: Formats the core Admission time so history clicks work flawlessly!
     def to_representation(self, instance):
         data = super().to_representation(instance)
         if instance.dateTime:
@@ -102,13 +99,33 @@ class PatientSerializer(serializers.ModelSerializer):
         model = Patient
         fields = '__all__'
 
-    # 🌟 THE BACKEND SANITIZER
-    # This catches empty strings ("") from React and turns them into None (null)
-    def to_internal_value(self, data):
-        # List of all Date fields that might come in as empty strings
-        date_fields = ['dob', 'tpaValidity', 'tpaPanelValidity']
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
         
-        # We create a copy so we don't mutate the original request data unexpectedly
+        if instance.dob:
+            from datetime import date
+            today = date.today()
+            dob = instance.dob
+            
+            years = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        
+            months = today.month - dob.month
+            if today.day < dob.day:
+                months -= 1
+            if months < 0:
+                months += 12
+
+            days = today.day - dob.day
+            if days < 0:
+                days += 30 
+                
+            data['ageYY'] = years
+            data['ageMM'] = months
+            data['ageDD'] = days
+            
+        return data
+    def to_internal_value(self, data):
+        date_fields = ['dob', 'tpaValidity', 'tpaPanelValidity']
         resource_data = data.copy()
         
         for field in date_fields:
@@ -118,25 +135,21 @@ class PatientSerializer(serializers.ModelSerializer):
         return super().to_internal_value(resource_data)
 
     def validate(self, data):
-        # 🌟 Get the ID of the current patient if we are doing an UPDATE
         current_patient_id = self.instance.id if self.instance else None
-
-        # 1. Check for Duplicate Phone Number
         phone = data.get('phone')
         if phone:
             phone_query = Patient.objects.filter(phone=phone)
             if current_patient_id:
-                phone_query = phone_query.exclude(id=current_patient_id) # Ignore themselves!
+                phone_query = phone_query.exclude(id=current_patient_id)
                 
             if phone_query.exists():
                 raise serializers.ValidationError({"error": f"A patient with phone number {phone} is already registered."})
-
-        # 2. Check for Duplicate National ID (Aadhar/PAN)
+            
         national_id = data.get('nationalId')
         if national_id:
             id_query = Patient.objects.filter(nationalId=national_id)
             if current_patient_id:
-                id_query = id_query.exclude(id=current_patient_id) # Ignore themselves!
+                id_query = id_query.exclude(id=current_patient_id)
                 
             if id_query.exists():
                 raise serializers.ValidationError({"error": f"A patient with National ID {national_id} is already registered."})

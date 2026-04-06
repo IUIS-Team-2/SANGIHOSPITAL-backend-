@@ -3,14 +3,10 @@ from django.utils import timezone
 import datetime
 
 class Patient(models.Model):
-    # Branch tracking
     BRANCH_CHOICES = [('LNM', 'Laxmi Nagar'), ('RYM', 'Raya')]
     branch_location = models.CharField(max_length=3, choices=BRANCH_CHOICES, default='LNM')
-    
-    # Auto-generated UHID
     uhid = models.CharField(max_length=25, unique=True, blank=True)
     
-    # Demographics (Matching React state exactly)
     patientName = models.CharField(max_length=150)
     guardianName = models.CharField(max_length=150)
     gender = models.CharField(max_length=15)
@@ -25,7 +21,6 @@ class Patient(models.Model):
     remarks = models.TextField(blank=True)
     allergies = models.TextField(blank=True)
     
-    # Billing / Panel Info
     payMode = models.CharField(max_length=20, default='cash')
     cashlessType = models.CharField(max_length=20, blank=True)
     tpa = models.CharField(max_length=100, blank=True)
@@ -38,14 +33,11 @@ class Patient(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
-        # 1. Save the model first to generate the raw PostgreSQL ID
         is_new = self.pk is None
         super().save(*args, **kwargs)
         
-        # 2. If it's a new patient, format the UHID and save again
         if is_new and not self.uhid:
             branch_prefix = "SHL" if self.branch_location == 'LNM' else "SHR"
-            # Formats as SHL-000-1, SHL-000-1502, etc.
             self.uhid = f"{branch_prefix}-000-{self.id}"
             self.save(update_fields=['uhid'])
 
@@ -53,7 +45,6 @@ class Patient(models.Model):
         return f"{self.uhid} - {self.patientName}"
 
 class Admission(models.Model):
-    # The related_name='admissions' lets React find this inside the Patient object!
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='admissions')
     ipdNo = models.CharField(max_length=50, unique=True, blank=True)
     admNo = models.PositiveIntegerField()
@@ -64,38 +55,29 @@ class Admission(models.Model):
 
     def __str__(self):
         return f"{self.patient.uhid} - Adm #{self.admNo} ({self.ipdNo})"
-
-    # 🌟 THE LOGIC: Auto-generate SH/GEN/26/1001 format
+    
     def save(self, *args, **kwargs):
         if not self.ipdNo:
-            # 1. Get the current year shorthand (e.g., '26' for 2026)
             year = datetime.datetime.now().strftime('%y')
             prefix = f"SH/GEN/{year}/"
-            
-            # 2. Find the highest existing IPD number for THIS year
             last_admission = Admission.objects.filter(
                 ipdNo__startswith=prefix
             ).order_by('-ipdNo').first()
             
             if last_admission:
                 try:
-                    # Extract the last part (the number), convert to int, and add 1
                     last_sequence = int(last_admission.ipdNo.split('/')[-1])
                     new_sequence = last_sequence + 1
                 except (ValueError, IndexError):
-                    # Fallback if string splitting fails for some reason
                     new_sequence = 1001
             else:
-                # First admission of the year starts at 1001
                 new_sequence = 1001
-                
-            # 3. Combine them: SH/GEN/26/1001
+            
             self.ipdNo = f"{prefix}{new_sequence}"
             
         super().save(*args, **kwargs)
 
 class MedicalHistory(models.Model):
-    # One Admission has exactly One Medical History record
     admission = models.OneToOneField(Admission, related_name='medicalHistory', on_delete=models.CASCADE)
     previousDiagnosis = models.TextField(blank=True)
     pastSurgeries = models.TextField(blank=True)
@@ -110,12 +92,20 @@ class MedicalHistory(models.Model):
 
 class Discharge(models.Model):
     admission = models.OneToOneField(Admission, related_name='discharge', on_delete=models.CASCADE)
+
+    department = models.CharField(max_length=100, blank=True)
+    doctorName = models.CharField(max_length=150, blank=True)
+    wardName = models.CharField(max_length=100, blank=True)
+    roomNo = models.CharField(max_length=50, blank=True)
+    bedNo = models.CharField(max_length=50, blank=True)
+    diagnosis = models.TextField(blank=True)
+    doa = models.DateTimeField(null=True, blank=True) 
+
     expectedDod = models.DateField(null=True, blank=True)
     dod = models.DateTimeField(null=True, blank=True)
     dischargeStatus = models.CharField(max_length=100, blank=True)
 
-class Service(models.Model):
-    # One admission can have MANY services (bed charge, blood test, x-ray)
+class Service(models.Model):    
     admission = models.ForeignKey(Admission, related_name='services', on_delete=models.CASCADE)
     svcName = models.CharField(max_length=200)
     svcCat = models.CharField(max_length=100, blank=True)
