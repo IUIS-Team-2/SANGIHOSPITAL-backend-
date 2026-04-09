@@ -1,14 +1,16 @@
 from django.contrib import admin
-
-# Register your models here.
-from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import HospitalUser
+from .models import CustomUser
 
-@admin.register(HospitalUser)
-class HospitalUserAdmin(UserAdmin):
-    model = HospitalUser
-    list_display = ['username', 'email', 'branch', 'is_staff']
+class CustomUserAdmin(UserAdmin):
+    model = CustomUser
+    list_display = ['username', 'email', 'first_name', 'last_name', 'role', 'branch', 'is_staff']
+    
     fieldsets = UserAdmin.fieldsets + (
-        ('Hospital Info', {'fields': ('branch', 'phone_number')}),
+        ('Hospital Assignment', {'fields': ('role', 'branch')}),
     )
+    add_fieldsets = UserAdmin.add_fieldsets + (
+        ('Hospital Assignment', {'fields': ('role', 'branch')}),
+    )
+
+admin.site.register(CustomUser, CustomUserAdmin)

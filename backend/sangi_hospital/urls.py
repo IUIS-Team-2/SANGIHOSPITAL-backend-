@@ -20,4 +20,5 @@ from django.urls import path, include
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('patients.urls')), # This creates the /api/patients/ endpoint
+    path('api/users/', include('users.urls')),
 ]

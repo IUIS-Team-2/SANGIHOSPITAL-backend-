@@ -41,9 +41,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    # Third-party apps
     'rest_framework',
-    'corsheaders', # To allow React to talk to Django
+    'rest_framework_simplejwt',
+    'corsheaders',
     'core',
     'users',
     'patients',
@@ -95,12 +95,21 @@ DATABASES = {
     }
 }
 
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+
+
+# DEFAULT_FROM_EMAIL = f"Sangi Hospital Admin <{EMAIL_HOST_USER}>"
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
 # 2. Tell Django to use your Custom User Model
-AUTH_USER_MODEL = 'users.HospitalUser'
+AUTH_USER_MODEL = 'users.CustomUser'
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -141,3 +150,9 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOW_ALL_ORIGINS = True
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    )
+}
