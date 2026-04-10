@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 import datetime
+from django.conf import settings
 
 class Patient(models.Model):
     BRANCH_CHOICES = [('LNM', 'Laxmi Nagar'), ('RYM', 'Raya')]
@@ -136,3 +137,29 @@ class ServiceMaster(models.Model):
 
     def __str__(self):
         return f"[{self.category}] {self.description}"
+
+class DischargeSummary(models.Model):
+
+    STATUS_CHOICES = [
+        ('NORMAL', 'Normal'),
+        ('LAMA', 'LAMA'),
+        ('REFERRED', 'Referred'),
+        ('DEATH', 'Death'),
+        ('DOPR', 'dopr'),
+    ]
+
+    # Links directly to your existing Admission model
+    admission = models.OneToOneField(Admission, on_delete=models.CASCADE, related_name='dynamic_summary')
+    
+    summary_type = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    
+    # This JSON field holds the entire generated/edited template form
+    content = models.JSONField(default=dict) 
+    
+    # Audit tracking
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.summary_type} Summary for Adm No: {self.admission.admNo} (UHID: {self.admission.patient.uhid})"

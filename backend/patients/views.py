@@ -11,7 +11,8 @@ from .models import (
     Discharge, 
     Service, 
     Billing, 
-    ServiceMaster
+    ServiceMaster,
+    DischargeSummary
 )
 from .serializers import (
     PatientSerializer, 
@@ -19,8 +20,13 @@ from .serializers import (
     DischargeSerializer, 
     ServiceSerializer, 
     BillingSerializer,
-    ServiceMasterSerializer
+    ServiceMasterSerializer,
+    DischargeSummarySerializer
 )
+import copy
+from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
+from .templates import DISCHARGE_TEMPLATES
 
 class PatientViewSet(viewsets.ModelViewSet):
     queryset = Patient.objects.all().order_by('-created_at')
@@ -245,3 +251,61 @@ class ServiceMasterViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ServiceMaster.objects.all()
     serializer_class = ServiceMasterSerializer
     pagination_class = None 
+
+class DynamicDischargeSummaryView(APIView):
+    def get(self, request, uhid, adm_no):
+        summary_type = request.query_params.get('type', 'LAMA').upper()
+        
+        # Map Receptionist statuses to Official Templates
+        if summary_type == 'RECOVERED':
+            summary_type = 'NORMAL'
+            
+        admission = get_object_or_404(Admission, patient__uhid=uhid, admNo=adm_no)
+
+        # 1. Check if a doctor already saved a summary for this admission
+        existing_summary = DischargeSummary.objects.filter(admission=admission).first()
+        if existing_summary:
+            return Response({
+                "is_existing": True,
+                "summary_type": existing_summary.summary_type,
+                "content": existing_summary.content
+            }, status=status.HTTP_200_OK)
+
+        # 2. If no existing summary, generate a fresh one from our templates.py
+        template = copy.deepcopy(DISCHARGE_TEMPLATES.get(summary_type, DISCHARGE_TEMPLATES["LAMA"]))
+
+        # 3. 🌟 FIXED PRE-FILL LOGIC: medicalHistory is a Django Model, not a dictionary!
+        try:
+            med_hist = getattr(admission, 'medicalHistory', None)
+            if med_hist:
+                # Pre-fill "K/C/O" with the patient's previous diagnosis if it exists
+                if "k_c_o" in template["sections"] and med_hist.previousDiagnosis:
+                    template["sections"]["k_c_o"]["value"] = med_hist.previousDiagnosis
+        except Exception:
+            pass # Failsafe in case medical history doesn't exist yet
+
+        return Response({
+            "is_existing": False,
+            "summary_type": summary_type,
+            "content": template
+        }, status=status.HTTP_200_OK)
+
+    def post(self, request, uhid, adm_no):
+        admission = get_object_or_404(Admission, patient__uhid=uhid, admNo=adm_no)
+        summary_type = request.data.get('summary_type', 'LAMA')
+        content = request.data.get('content', {})
+
+        # Update if it exists, Create if it doesn't
+        summary, created = DischargeSummary.objects.update_or_create(
+            admission=admission,
+            defaults={
+                'summary_type': summary_type,
+                'content': content,
+                'created_by': request.user if request.user.is_authenticated else None
+            }
+        )
+
+        return Response(
+            {"message": "Discharge Summary saved successfully!", "data": DischargeSummarySerializer(summary).data}, 
+            status=status.HTTP_200_OK if not created else status.HTTP_201_CREATED
+        )

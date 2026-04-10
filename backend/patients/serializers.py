@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.db import transaction
 from django.utils import timezone
-from .models import Patient, Admission, MedicalHistory, Discharge, Service, Billing, ServiceMaster
+from .models import Patient, Admission, MedicalHistory, Discharge, Service, Billing, ServiceMaster, DischargeSummary
 
 class ServiceMasterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -155,3 +155,9 @@ class PatientSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"error": f"A patient with National ID {national_id} is already registered."})
 
         return data
+    
+class DischargeSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DischargeSummary
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at', 'created_by']
