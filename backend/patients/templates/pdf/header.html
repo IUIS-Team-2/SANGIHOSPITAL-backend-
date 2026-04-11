@@ -1,0 +1,72 @@
+<style>
+    @page { size: A4; margin: 1cm 1.5cm; }
+    body { font-family: 'Helvetica', sans-serif; font-size: 11.5px; color: #000; }
+    
+    .header-title { text-align: center; font-size: 16px; font-weight: bold; text-decoration: underline; margin-bottom: 20px; text-transform: uppercase; }
+    
+    /* Header Table with visible borders */
+    .info-table { width: 100%; margin-bottom: 25px; border-collapse: collapse; }
+    .info-table td { padding: 3px; vertical-align: top; width: 50%; font-size: 11px; border: 1px solid #000; }
+    .lbl { color: #000; font-weight: bold; }
+    
+    /* Section Styling */
+    .section { margin-bottom: 15px; }
+    .section-title { font-weight: bold; font-size: 12px; text-decoration: underline; margin-bottom: 6px; text-transform: uppercase; color: #000; }
+    .section-content { text-align: justify; white-space: pre-wrap; line-height: 1.4; font-size: 11.5px; }
+
+    /* Vitals Grid with visible borders */
+    .vitals-table { width: 100%; font-size: 11.5px; margin-top: 5px; margin-bottom: 20px; border-collapse: collapse; }
+    .vitals-table td { padding: 5px; border: 1px solid #000; }
+    
+    /* Updated Standardized Footer CSS */
+.footer-table { 
+    margin-top: 50px; 
+    width: 100%; 
+    font-weight: bold; 
+    font-size: 12px; 
+    /* text-align: center;  */
+    border-collapse: collapse;
+}
+.footer-table td { 
+    width: 50%; 
+    vertical-align: bottom;
+    padding-bottom: 5px;
+}
+</style>
+
+<div class="header-title">{{ s.summary_type }} SUMMARY</div>
+
+<table class="info-table">
+    <tr>
+        <td><span class="lbl">IPD No.:</span> &nbsp;{{ ipd_no }}</td>
+        <td><span class="lbl">Bill No.:</span> &nbsp;{{ bill_no }}</td>
+    </tr>
+    <tr>
+        <td><span class="lbl">Patient Name:</span> &nbsp;<strong>{{ patient_name }}</strong></td>
+        <td><span class="lbl">Bill Date:</span> &nbsp;{{ bill_date }}</td>
+    </tr>
+    <tr>
+        <td><span class="lbl">Guardian Name:</span> &nbsp;{{ guardian_name }}</td>
+        <td><span class="lbl">Age/Sex:</span> &nbsp;{{ age_sex }}</td>
+    </tr>
+    <tr>
+        <td><span class="lbl">Address:</span> &nbsp;{{ address }}</td>
+        <td><span class="lbl">Card No.:</span> &nbsp;{{ card_no }}</td>
+    </tr>
+    <tr>
+        <td><span class="lbl">Consultant:</span> &nbsp;{{ consultant }}</td>
+        <td><span class="lbl">Room:</span> &nbsp;{{ room }}</td>
+    </tr>
+    <tr>
+        <td><span class="lbl">Claim ID:</span> &nbsp;{{ claim_id }}</td>
+        <td><span class="lbl">Panel:</span> &nbsp;{{ panel }}</td>
+    </tr>
+    <tr>
+        <td><span class="lbl">DOA & Time:</span> &nbsp;{{ doa }}</td>
+        <td><span class="lbl">Contact No.:</span> &nbsp;{{ contact_no }}</td>
+    </tr>
+    <tr>
+        <td><span class="lbl">DOD & Time:</span> &nbsp;{{ dod }}</td>
+        <td><span class="lbl">Status on Discharge:</span> &nbsp;{{ status_on_discharge }}</td>
+    </tr>
+</table>

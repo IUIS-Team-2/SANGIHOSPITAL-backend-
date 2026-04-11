@@ -27,6 +27,10 @@ import copy
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from .templates import DISCHARGE_TEMPLATES
+import io
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+from xhtml2pdf import pisa 
 
 class PatientViewSet(viewsets.ModelViewSet):
     queryset = Patient.objects.all().order_by('-created_at')
@@ -253,16 +257,19 @@ class ServiceMasterViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = None 
 
 class DynamicDischargeSummaryView(APIView):
+    def _clean_status(self, raw_status):
+        status_str = str(raw_status).upper()
+        if "LAMA" in status_str: return "LAMA"
+        if "DOPR" in status_str: return "DOPR"
+        if "REFER" in status_str: return "REFER"
+        if "DEATH" in status_str: return "DEATH"
+        return "NORMAL"
+
     def get(self, request, uhid, adm_no):
-        summary_type = request.query_params.get('type', 'LAMA').upper()
-        
-        # Map Receptionist statuses to Official Templates
-        if summary_type == 'RECOVERED':
-            summary_type = 'NORMAL'
-            
+        raw_type = request.query_params.get('type', 'NORMAL')
+        summary_type = self._clean_status(raw_type)
         admission = get_object_or_404(Admission, patient__uhid=uhid, admNo=adm_no)
 
-        # 1. Check if a doctor already saved a summary for this admission
         existing_summary = DischargeSummary.objects.filter(admission=admission).first()
         if existing_summary:
             return Response({
@@ -271,41 +278,85 @@ class DynamicDischargeSummaryView(APIView):
                 "content": existing_summary.content
             }, status=status.HTTP_200_OK)
 
-        # 2. If no existing summary, generate a fresh one from our templates.py
-        template = copy.deepcopy(DISCHARGE_TEMPLATES.get(summary_type, DISCHARGE_TEMPLATES["LAMA"]))
+        template = copy.deepcopy(DISCHARGE_TEMPLATES.get(summary_type, DISCHARGE_TEMPLATES["NORMAL"]))
 
-        # 3. 🌟 FIXED PRE-FILL LOGIC: medicalHistory is a Django Model, not a dictionary!
+        # 🌟 UPDATED PRE-FILL: Iterate through the List to find keys
         try:
             med_hist = getattr(admission, 'medicalHistory', None)
             if med_hist:
-                # Pre-fill "K/C/O" with the patient's previous diagnosis if it exists
-                if "k_c_o" in template["sections"] and med_hist.previousDiagnosis:
-                    template["sections"]["k_c_o"]["value"] = med_hist.previousDiagnosis
+                for section in template["sections"]:
+                    if section["key"] == "k_c_o" and med_hist.previousDiagnosis:
+                        section["value"] = med_hist.previousDiagnosis
         except Exception:
-            pass # Failsafe in case medical history doesn't exist yet
+            pass
 
-        return Response({
-            "is_existing": False,
-            "summary_type": summary_type,
-            "content": template
-        }, status=status.HTTP_200_OK)
+        return Response({"is_existing": False, "summary_type": summary_type, "content": template}, status=status.HTTP_200_OK)
 
     def post(self, request, uhid, adm_no):
         admission = get_object_or_404(Admission, patient__uhid=uhid, admNo=adm_no)
-        summary_type = request.data.get('summary_type', 'LAMA')
+        raw_type = request.data.get('summary_type', 'NORMAL')
+        summary_type = self._clean_status(raw_type)
         content = request.data.get('content', {})
 
-        # Update if it exists, Create if it doesn't
         summary, created = DischargeSummary.objects.update_or_create(
             admission=admission,
-            defaults={
-                'summary_type': summary_type,
-                'content': content,
-                'created_by': request.user if request.user.is_authenticated else None
-            }
+            defaults={'summary_type': summary_type, 'content': content, 'created_by': request.user if request.user.is_authenticated else None}
         )
+        return Response({"message": "Discharge Summary saved successfully!", "data": DischargeSummarySerializer(summary).data}, status=status.HTTP_200_OK)
 
-        return Response(
-            {"message": "Discharge Summary saved successfully!", "data": DischargeSummarySerializer(summary).data}, 
-            status=status.HTTP_200_OK if not created else status.HTTP_201_CREATED
-        )
+class PrintDischargeSummaryView(APIView):
+    def get(self, request, uhid, adm_no):
+        admission = get_object_or_404(Admission, patient__uhid=uhid, admNo=adm_no)
+        summary = get_object_or_404(DischargeSummary, admission=admission)
+        
+        status_map = {"NORMAL": "pdf/normal.html", "RECOVERED": "pdf/normal.html", "LAMA": "pdf/lama.html", "REFER": "pdf/refer.html", "DOPR": "pdf/dopr.html", "DEATH": "pdf/death.html"}
+        template_file = status_map.get(summary.summary_type, "pdf/normal.html")
+        
+        patient = admission.patient
+        discharge = getattr(admission, 'discharge', None)
+        billing = getattr(admission, 'billing', None)
+
+        age = "--"
+        if patient.dob:
+            calc_age = (timezone.now().date() - patient.dob).days // 365
+            age = f"{calc_age} YRS"
+
+        sections = summary.content.get("sections", [])
+
+        # 🌟 NEW: BACKEND AUTO-CONVERTER 🌟
+        # If an old database record is an Object/Dict, convert it to a List format instantly!
+        if isinstance(sections, dict):
+            sections = [{"key": k, **v} for k, v in sections.items()]
+
+        # Now we can safely iterate through the list without crashing
+        if discharge:
+            for section in sections:
+                if section.get("key") == "condition_at_discharge":
+                    section["value"] = discharge.dischargeStatus.upper() if discharge.dischargeStatus else "--"
+
+        context = {
+            "s": summary, "sections": sections,
+            "ipd_no": admission.ipdNo, "patient_name": patient.patientName.upper(),
+            "guardian_name": patient.guardianName.upper() if patient.guardianName else "--",
+            "address": patient.address, "consultant": discharge.doctorName.upper() if discharge and discharge.doctorName else "--",
+            "claim_id": patient.tpaPanelCardNo if patient.tpaPanelCardNo else "--",
+            "doa": admission.dateTime.strftime("%d-%m-%Y %H:%M HRS") if admission.dateTime else "--",
+            "dod": discharge.dod.strftime("%d-%m-%Y %H:%M HRS") if (discharge and discharge.dod) else "--",
+            "bill_no": f"{billing.id}/{admission.dateTime.strftime('%y')}" if billing else "--",
+            "bill_date": discharge.dod.strftime("%d-%m-%Y %H:%M HRS") if (discharge and discharge.dod) else "--",
+            "age_sex": f"{age} / {patient.gender.upper()}", "card_no": patient.tpaCard if patient.tpaCard else "--",
+            "room": f"{discharge.roomNo} / {discharge.wardName.upper()}" if discharge and discharge.roomNo else "-- / --",
+            "panel": patient.tpa.upper() if patient.tpa else patient.payMode.upper(),
+            "contact_no": patient.phone, "status_on_discharge": discharge.dischargeStatus.upper() if discharge and discharge.dischargeStatus else "--",
+        }
+
+        html_string = render_to_string(template_file, context)
+        result = io.BytesIO()
+        pdf = pisa.pisaDocument(io.BytesIO(html_string.encode("UTF-8")), result)
+        
+        if not pdf.err:
+            response = HttpResponse(result.getvalue(), content_type='application/pdf')
+            response['Content-Disposition'] = f'inline; filename="{uhid}_summary.pdf"'
+            return response
+            
+        return Response({"error": "PDF Generation Failed"}, status=400)
