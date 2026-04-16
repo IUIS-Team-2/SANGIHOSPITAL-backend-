@@ -35,12 +35,19 @@ class Patient(models.Model):
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
-        super().save(*args, **kwargs)
         
+        # Generate UHID BEFORE saving to avoid double-saving
         if is_new and not self.uhid:
             branch_prefix = "SHL" if self.branch_location == 'LNM' else "SHR"
-            self.uhid = f"{branch_prefix}-000-{self.id}"
-            self.save(update_fields=['uhid'])
+            
+            # Count how many patients already exist IN THIS BRANCH
+            branch_count = Patient.objects.filter(branch_location=self.branch_location).count()
+            new_sequence = branch_count + 1
+            
+            # Formats to SHL-000-1, SHR-000-1, etc.
+            self.uhid = f"{branch_prefix}-000-{new_sequence}"
+            
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.uhid} - {self.patientName}"
