@@ -49,6 +49,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install requirements
 pip install -r requirements.txt
 pip install openpyxl  # Required for Master Tariff Excel import
+pip install xhtml2pdf
 
 # Run database migrations
 python manage.py makemigrations

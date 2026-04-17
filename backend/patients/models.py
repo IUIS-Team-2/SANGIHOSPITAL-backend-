@@ -114,7 +114,8 @@ class Discharge(models.Model):
     dischargeStatus = models.CharField(max_length=100, blank=True)
 
 class Service(models.Model):    
-    admission = models.ForeignKey(Admission, related_name='services', on_delete=models.CASCADE)
+    admission = models.ForeignKey('Admission', related_name='services', on_delete=models.CASCADE)
+    pricing_applied = models.CharField(max_length=10, default='CASH')
     svcName = models.CharField(max_length=200)
     svcCat = models.CharField(max_length=100, blank=True)
     svcDate = models.DateField(null=True, blank=True)
@@ -123,11 +124,18 @@ class Service(models.Model):
     svcTot = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
 class Billing(models.Model):
-    admission = models.OneToOneField(Admission, related_name='billing', on_delete=models.CASCADE)
+    admission = models.ForeignKey('Admission', related_name='bills', on_delete=models.CASCADE)
+    
+    BILL_TYPE_CHOICES = [
+        ('CASH', 'Cash'),
+        ('CASHLESS', 'Cashless'),
+    ]
+    bill_type = models.CharField(max_length=20, choices=BILL_TYPE_CHOICES, default='CASH') # ✨ NEW
+    
     paymentMode = models.CharField(max_length=50, blank=True)
     paidNow = models.BooleanField(default=False)  
     printStatus = models.CharField(max_length=50, default='DRAFT') 
-    printRequestedAt = models.DateTimeField(null=True, blank=True)  
+    printRequestedAt = models.DateTimeField(null=True, blank=True)
 
 class ServiceMaster(models.Model):
     CATEGORY_CHOICES = [
@@ -137,13 +145,20 @@ class ServiceMaster(models.Model):
         ('RADIOLOGY', 'Radiology'),
         ('GENERAL SERVICES', 'General Services'),
     ]
+    
+    PRICING_CHOICES = [
+        ('CASH', 'Cash'),
+        ('CASHLESS', 'Cashless'),
+    ]
+    
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
-    description = models.CharField(max_length=255)
+    pricing_type = models.CharField(max_length=10, choices=PRICING_CHOICES, default='CASH') 
+    description = models.TextField()
     code = models.CharField(max_length=50, blank=True)
     rate = models.DecimalField(max_digits=10, decimal_places=2)
 
     def __str__(self):
-        return f"[{self.category}] {self.description}"
+        return f"[{self.category}] {self.description} ({self.pricing_type})"
 
 class DischargeSummary(models.Model):
 

@@ -135,25 +135,56 @@ class PatientViewSet(viewsets.ModelViewSet):
         
         try:
             admission_obj, _ = Admission.objects.get_or_create(patient=patient, admNo=adm_no)
-            ser = ServiceSerializer(data=service_data)
             
-            if ser.is_valid():
-                svc_name = ser.validated_data.get('svcName', 'Service Charge')
-                svc_cat = ser.validated_data.get('svcCat', '')
+            # 1. Extract the secure, basic data sent from the frontend
+            svc_name = service_data.get('svcName')
+            # Look for the pricing type (defaults to CASH if not provided)
+            pricing_applied = service_data.get('pricing_type', 'CASH').upper() 
+            svc_qty = int(service_data.get('svcQty', 1))
+            svc_date = service_data.get('svcDate')
+            
+            if not svc_name:
+                return Response({'error': 'Service name (svcName) is required.'}, status=status.HTTP_400_BAD_REQUEST)
                 
-                service, created = Service.objects.update_or_create(
-                    admission=admission_obj,
-                    svcName=svc_name,  
-                    svcCat=svc_cat,    
-                    defaults={
-                        'svcQty': ser.validated_data.get('svcQty', 1),
-                        'svcRate': ser.validated_data.get('svcRate', 0),
-                        'svcTot': ser.validated_data.get('svcTot', 0),
-                        'svcDate': ser.validated_data.get('svcDate')
-                    }
-                )
-                return Response({'status': 'Service saved successfully', 'data': ServiceSerializer(service).data})
-            return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+            # ✨ 2. AUTOMATED SECURE PRICING LOGIC
+            # Query the ServiceMaster DB to get the correct rate based on the pricing type
+            from .models import ServiceMaster # Ensuring it's imported
+            
+            master_service = ServiceMaster.objects.filter(
+                description__iexact=svc_name, 
+                pricing_type=pricing_applied
+            ).first()
+            
+            if not master_service:
+                return Response({
+                    'error': f"Service '{svc_name}' with pricing '{pricing_applied}' not found in the master tariff list."
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+            # 3. The Backend calculates the rate and total to prevent tampering
+            svc_rate = master_service.rate
+            svc_tot = svc_rate * svc_qty
+            svc_cat = master_service.category
+            
+            # 4. Save the service with the newly fetched data
+            service, created = Service.objects.update_or_create(
+                admission=admission_obj,
+                svcName=svc_name,  
+                pricing_applied=pricing_applied, # We use this in the lookup to separate Cash vs Cashless updates
+                defaults={
+                    'svcCat': svc_cat,
+                    'svcQty': svc_qty,
+                    'svcRate': svc_rate,
+                    'svcTot': svc_tot,
+                    'svcDate': svc_date
+                }
+            )
+            
+            from .serializers import ServiceSerializer # Ensuring serializer is ready
+            return Response({
+                'status': 'Service added successfully with automated pricing.', 
+                'data': ServiceSerializer(service).data
+            })
+            
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -246,10 +277,30 @@ class PatientViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def pending_prints(self, request):
-        pending_patients = Patient.objects.filter(admissions__billing__printStatus='PENDING').distinct()
+        pending_patients = Patient.objects.filter(admissions__bills__printStatus='PENDING').distinct()
         
         serializer = self.get_serializer(pending_patients, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'], url_path='cashless-records')
+    def cashless_records(self, request):
+        # 1. Strict Security Check: Only Office Admins can hit this endpoint
+        if getattr(request.user, 'role', '') != 'office_admin':
+            return Response(
+                {"error": "Unauthorized access. Only Office Admins can view the corporate dashboard."}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 2. Database Query: Find patients linked to an admission that has a cashless bill
+        # The .distinct() ensures we don't get duplicate patients if they have multiple cashless visits
+        from .models import Patient
+        cashless_patients = Patient.objects.filter(admissions__bills__bill_type='CASHLESS').distinct()
+        
+        # 3. Serialize and Return
+        # Because the user is 'office_admin', our updated serializer will naturally 
+        # expose all the prices and totals we hid from the hospital staff!
+        serializer = self.get_serializer(cashless_patients, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
     
 class ServiceMasterViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ServiceMaster.objects.all()

@@ -32,11 +32,24 @@ class ServiceSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
+        
+        # Your existing custom mappings for the frontend
         data['title'] = data.get('svcName')
         data['type'] = data.get('svcCat')
         data['rate'] = data.get('svcRate')
         data['qty'] = data.get('svcQty')
         data['total'] = data.get('svcTot')
+
+        request = self.context.get('request')
+        if request and getattr(request.user, 'role', '') != 'office_admin':
+            if getattr(instance, 'pricing_applied', 'CASH') == 'CASHLESS':
+                # Remove the database fields
+                data.pop('svcRate', None)
+                data.pop('svcTot', None)
+                # Remove the custom frontend mapped fields
+                data.pop('rate', None)
+                data.pop('total', None)
+                
         return data
 
     def to_internal_value(self, data):
@@ -75,6 +88,16 @@ class BillingSerializer(serializers.ModelSerializer):
         model = Billing
         fields = '__all__'
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+
+        if request and getattr(request.user, 'role', '') != 'office_admin':
+            if getattr(instance, 'bill_type', 'CASH') == 'CASHLESS':
+                data.pop('paymentMode', None)
+                data.pop('paidNow', None)
+                
+        return data
 class AdmissionSerializer(serializers.ModelSerializer):
     medicalHistory = MedicalHistorySerializer(read_only=True)
     discharge = DischargeSerializer(read_only=True)

@@ -7,6 +7,7 @@ class CustomUser(AbstractUser):
     ROLE_CHOICES = (
         ('superadmin', 'Super Admin'),
         ('admin', 'Branch Admin'),
+        ('office_admin', 'Office Admin'), 
         ('receptionist', 'Receptionist'),
         ('billing', 'Billing Staff'),
     )
