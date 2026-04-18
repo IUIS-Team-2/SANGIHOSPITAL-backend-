@@ -38,6 +38,26 @@ class PatientViewSet(viewsets.ModelViewSet):
     lookup_field = 'uhid'
     lookup_value_regex = '[^/]+' 
 
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = Patient.objects.all()
+
+        # 1. Super Admins and Office Admins get the data (we will perfectly filter it in the frontend)
+        if user.role in ['superadmin', 'office_admin']:
+            return queryset
+            
+        # 2. Office Admin: Sees ALL branches, but ONLY patients registered as cashless
+        if user.role == 'office_admin':
+            return queryset.filter(payMode__iexact='cashless').distinct()
+            
+        # 3. Branch Admins, Receptionists, and Billing: See BOTH cash & cashless, but ONLY for their specific branch
+        if user.branch and user.branch != 'ALL':
+            # Looking at your models.py, your Patient model uses 'branch_location'
+            return queryset.filter(branch_location=user.branch)
+            
+        return queryset
+
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
         

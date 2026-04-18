@@ -24,7 +24,7 @@ class UserListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role == 'superadmin':
+        if user.role in ['superadmin', 'office_admin']: # ✨ ADDED office_admin
             return CustomUser.objects.all()
         elif user.role == 'admin':
             return CustomUser.objects.filter(branch=user.branch)
@@ -42,13 +42,12 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        # Super Admin can edit/delete ANY user
-        if user.role == 'superadmin':
+        if user.role in ['superadmin', 'office_admin']: # ✨ ADDED office_admin
             return CustomUser.objects.all()
-        # Branch Admin can only edit/delete users IN THEIR OWN BRANCH
         elif user.role == 'admin':
             return CustomUser.objects.filter(branch=user.branch)
         return CustomUser.objects.none()
+    
 class AdminResetPasswordView(generics.UpdateAPIView):
     queryset = CustomUser.objects.all()
     serializer_class = AdminPasswordResetSerializer
