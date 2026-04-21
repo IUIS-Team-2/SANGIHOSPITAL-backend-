@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.db import transaction
 from django.utils import timezone
 from .models import Patient, Admission, MedicalHistory, Discharge, Service, Billing, ServiceMaster, DischargeSummary
+from .models import Task
 
 class ServiceMasterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -184,3 +185,11 @@ class DischargeSummarySerializer(serializers.ModelSerializer):
         model = DischargeSummary
         fields = '__all__'
         read_only_fields = ['created_at', 'updated_at', 'created_by']
+
+class TaskSerializer(serializers.ModelSerializer):
+    assigned_by_name = serializers.CharField(source='assigned_by.get_full_name', read_only=True)
+    assigned_to_name = serializers.CharField(source='assigned_to.get_full_name', read_only=True)
+
+    class Meta:
+        model = Task
+        fields = '__all__'

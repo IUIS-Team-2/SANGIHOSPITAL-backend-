@@ -2,6 +2,8 @@ from django.db import models
 from django.utils import timezone
 import datetime
 from django.conf import settings
+from users.models import CustomUser
+
 
 class Patient(models.Model):
     BRANCH_CHOICES = [('LNM', 'Laxmi Nagar'), ('RYM', 'Raya')]
@@ -185,3 +187,42 @@ class DischargeSummary(models.Model):
 
     def __str__(self):
         return f"{self.summary_type} Summary for Adm No: {self.admission.admNo} (UHID: {self.admission.patient.uhid})"
+    
+class Task(models.Model):
+    PRIORITY_CHOICES = (
+        ('Low', 'Low'),
+        ('Medium', 'Medium'),
+        ('High', 'High'),
+        ('Urgent', 'Urgent'),
+    )
+    STATUS_CHOICES = (
+        ('Pending', 'Pending'),
+        ('In Progress', 'In Progress'),
+        ('Completed', 'Completed'),
+        ('On Hold', 'On Hold'),
+    )
+    
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    
+    # Who assigned it? (Office Admin or HOD)
+    assigned_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, related_name='tasks_given')
+    
+    # Who is doing it? (HOD or Staff)
+    assigned_to = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='tasks_received')
+    
+    # Which department does this task belong to?
+    department = models.CharField(max_length=100) 
+    
+    # 🌟 MULTI-SELECT PATIENTS: Link the specific cashless patients to this task!
+    patients = models.ManyToManyField(Patient, related_name='assigned_tasks')
+    
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='Medium')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    due_date = models.DateTimeField(blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.title} - {self.assigned_to.username}"

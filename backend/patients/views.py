@@ -3,7 +3,8 @@ from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db import transaction  
+from django.db import transaction
+from django.db import models 
 from .models import (
     Patient, 
     Admission, 
@@ -31,6 +32,13 @@ import io
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 from xhtml2pdf import pisa 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.db.models import Count, Q
+from users.models import CustomUser
+from rest_framework import generics
+from .models import Task
+from .serializers import TaskSerializer
 
 class PatientViewSet(viewsets.ModelViewSet):
     queryset = Patient.objects.all().order_by('-created_at')
@@ -43,20 +51,26 @@ class PatientViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = Patient.objects.all()
 
-        # 1. Super Admins and Office Admins get the data (we will perfectly filter it in the frontend)
+        # 1. Super Admin & Office Admin see everything (Office admin filtered to cashless in JS)
         if user.role in ['superadmin', 'office_admin']:
             return queryset
             
-        # 2. Office Admin: Sees ALL branches, but ONLY patients registered as cashless
-        if user.role == 'office_admin':
-            return queryset.filter(payMode__iexact='cashless').distinct()
-            
-        # 3. Branch Admins, Receptionists, and Billing: See BOTH cash & cashless, but ONLY for their specific branch
-        if user.branch and user.branch != 'ALL':
-            # Looking at your models.py, your Patient model uses 'branch_location'
+        # 2. Branch Admin sees their branch
+        elif user.role == 'admin':
             return queryset.filter(branch_location=user.branch)
             
-        return queryset
+        # 3. HOD sees tasks assigned to them, OR tasks they assigned to their department
+        elif user.role == 'hod':
+            return queryset.filter(
+                models.Q(assigned_tasks__assigned_to=user) | 
+                models.Q(assigned_tasks__assigned_by=user)
+            ).distinct()
+
+        # 🌟 4. THE TASK FILTER: Staff only see patients explicitly assigned to them!
+        elif user.role in ['billing', 'opd', 'intimation', 'query', 'uploading']:
+            return queryset.filter(assigned_tasks__assigned_to=user).distinct()
+
+        return queryset.none()
 
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
@@ -431,3 +445,53 @@ class PrintDischargeSummaryView(APIView):
             return response
             
         return Response({"error": "PDF Generation Failed"}, status=400)
+    
+class TaskReportAPIView(APIView):
+    # Only Office Admin & HOD can view this report
+    def get(self, request):
+        # Find all staff under them
+        staff = CustomUser.objects.filter(role__in=['billing', 'opd', 'intimation', 'query', 'uploading', 'hod'])
+        
+        report_data = []
+        for employee in staff:
+            # Count the tasks dynamically
+            total_tasks = employee.tasks_received.count()
+            completed_tasks = employee.tasks_received.filter(status='Completed').count()
+            
+            # Fetch the patients assigned to this employee
+            assigned_patients = Patient.objects.filter(assigned_tasks__assigned_to=employee).distinct()
+            patient_list = [{"uhid": p.uhid, "name": p.patientName} for p in assigned_patients]
+
+            if total_tasks > 0:
+                report_data.append({
+                    "employee_name": f"{employee.first_name} {employee.last_name}",
+                    "department": employee.role,
+                    "total_tasks": total_tasks,
+                    "completed_tasks": completed_tasks,
+                    "pending_tasks": total_tasks - completed_tasks,
+                    "assigned_patients": patient_list
+                })
+
+        return Response(report_data)
+    
+class TaskListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = TaskSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        # Office Admin sees all tasks
+        if user.role in ['superadmin', 'office_admin']:
+            return Task.objects.all()
+        # HOD sees tasks they created OR tasks assigned to them
+        elif user.role == 'hod':
+            return Task.objects.filter(models.Q(assigned_to=user) | models.Q(assigned_by=user))
+        # Staff only see tasks assigned to them
+        return Task.objects.filter(assigned_to=user)
+
+    def perform_create(self, serializer):
+        # When an Admin/HOD creates a task, automatically set them as the "assigned_by" person
+        serializer.save(assigned_by=self.request.user)
+
+class TaskDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = TaskSerializer
+    queryset = Task.objects.all()

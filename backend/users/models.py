@@ -7,9 +7,14 @@ class CustomUser(AbstractUser):
     ROLE_CHOICES = (
         ('superadmin', 'Super Admin'),
         ('admin', 'Branch Admin'),
-        ('office_admin', 'Office Admin'), 
+        ('office_admin', 'Office Admin'),
         ('receptionist', 'Receptionist'),
-        ('billing', 'Billing Staff'),
+        ('billing', 'Billing'),
+        ('hod', 'HOD'),
+        ('opd', 'OPD'),
+        ('intimation', 'Intimation'),
+        ('query', 'Query'),
+        ('uploading', 'Uploading'),
     )
 
     BRANCH_CHOICES = (

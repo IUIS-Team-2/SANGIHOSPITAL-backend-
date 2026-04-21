@@ -30,7 +30,7 @@ class UserManagementSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 
             'role', 'branch', 'emp_id', 'phone_number', 
-            'password', 'confirm_password'
+            'password', 'confirm_password', 'is_active'
         ]
 
     def validate_password(self, value):

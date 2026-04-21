@@ -24,10 +24,20 @@ class UserListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role in ['superadmin', 'office_admin']: # ✨ ADDED office_admin
+        
+        # 1. Super Admin sees absolutely everyone
+        if user.role == 'superadmin':
             return CustomUser.objects.all()
+            
+        # 2. 🌟 THE FIX: Office Admin ONLY sees the departments they create/manage
+        elif user.role == 'office_admin':
+            managed_roles = ['hod', 'billing', 'opd', 'intimation', 'query', 'uploading']
+            return CustomUser.objects.filter(role__in=managed_roles)
+            
+        # 3. Branch Admin only sees their own branch's staff
         elif user.role == 'admin':
             return CustomUser.objects.filter(branch=user.branch)
+            
         return CustomUser.objects.none()
 
     def perform_create(self, serializer):
@@ -36,16 +46,27 @@ class UserListCreateView(generics.ListCreateAPIView):
             serializer.save(branch=user.branch)
         else:
             serializer.save()
+
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = UserManagementSerializer
     permission_classes = [IsBranchAdminOrSuperAdmin]
 
     def get_queryset(self):
         user = self.request.user
-        if user.role in ['superadmin', 'office_admin']: # ✨ ADDED office_admin
+        
+        # 1. Super Admin sees absolutely everyone
+        if user.role == 'superadmin':
             return CustomUser.objects.all()
+            
+        # 2. 🌟 THE FIX: Apply the exact same security filter here
+        elif user.role == 'office_admin':
+            managed_roles = ['hod', 'billing', 'opd', 'intimation', 'query', 'uploading']
+            return CustomUser.objects.filter(role__in=managed_roles)
+            
+        # 3. Branch Admin only sees their own branch's staff
         elif user.role == 'admin':
             return CustomUser.objects.filter(branch=user.branch)
+            
         return CustomUser.objects.none()
     
 class AdminResetPasswordView(generics.UpdateAPIView):
@@ -75,30 +96,28 @@ class RequestPasswordResetOTPView(APIView):
     permission_classes = [AllowAny] 
 
     def post(self, request):
-        serializer = RequestOTPSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        email = serializer.validated_data['email']
+        email = request.data.get('email')
 
         try:
             user = CustomUser.objects.get(email=email)
         except CustomUser.DoesNotExist:
             return Response(
-                {"message": "If an account with that email exists, an OTP has been sent."}, 
-                status=status.HTTP_200_OK
+                {"error": "This email is not registered in our system."}, 
+                status=status.HTTP_404_NOT_FOUND
             )
 
         # 1. Generate a random 6-digit OTP
         otp_code = str(random.randint(100000, 999999))
 
-        # 2. Invalidate any old unused OTPs for this user so they don't get confused
+        # 2. Invalidate any old unused OTPs
         PasswordResetOTP.objects.filter(user=user, is_used=False).update(is_used=True)
 
         # 3. Save the new OTP to the database
         PasswordResetOTP.objects.create(user=user, otp=otp_code)                    
 
-        # 4. Send the Email via Gmail
+        # 4. 🌟 THE FIX: Updated Email Text Formatting
         subject = "Sangi Hospital - Password Reset OTP"
-        message = f"Hello {user.first_name or user.username},\n\nYour password reset code is: {otp_code}\n\nThis code will expire in 10 minutes. If you did not request this, please ignore this email."
+        message = f"Hello {user.first_name or user.username},\n\nYour password reset code is: {otp_code}\n\nThis code will expire in 10 minutes.\nIf you did not request this, please ignore this email."
         
         try:
             send_mail(
@@ -115,38 +134,41 @@ class RequestPasswordResetOTPView(APIView):
             )
 
         return Response(
-            {"message": "If an account with that email exists, an OTP has been sent."}, 
+            {"message": "OTP has been sent successfully."}, 
             status=status.HTTP_200_OK
         )
     
 class VerifyPasswordResetOTPView(APIView):
-    permission_classes = [AllowAny] # No token required because they forgot their password!
+    permission_classes = [AllowAny] 
 
     def post(self, request):
-        serializer = VerifyOTPandResetSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        email = serializer.validated_data['email']
-        otp_code = serializer.validated_data['otp']
-        new_password = serializer.validated_data['new_password']
+        # 🌟 THE FIX: Directly extract data and strip spaces to prevent copy-paste errors
+        email = request.data.get('email')
+        otp_code = str(request.data.get('otp', '')).strip()
+        new_password = request.data.get('new_password')
+
+        if not email or not otp_code or not new_password:
+            return Response({"error": "Please provide your email, OTP, and a new password."}, status=status.HTTP_400_BAD_REQUEST)
 
         # 1. Find the user
         try:
             user = CustomUser.objects.get(email=email)
         except CustomUser.DoesNotExist:
-            return Response({"error": "Invalid request."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Invalid request. Email not found."}, status=status.HTTP_400_BAD_REQUEST)
+        except CustomUser.MultipleObjectsReturned:
+            user = CustomUser.objects.filter(email=email).first()
 
         # 2. Find the active OTP for this user
         try:
             otp_record = PasswordResetOTP.objects.get(user=user, otp=otp_code, is_used=False)
         except PasswordResetOTP.DoesNotExist:
-            return Response({"error": "Invalid or already used OTP."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Invalid or already used OTP. Please check the code and try again."}, status=status.HTTP_400_BAD_REQUEST)
 
         # 3. Check if the 10-minute timer expired
-        if not otp_record.is_valid():
+        if hasattr(otp_record, 'is_valid') and not otp_record.is_valid():
             return Response({"error": "OTP has expired. Please request a new one."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 4. Success! Change the password and burn the OTP so it can't be reused
+        # 4. Success! Change the password and burn the OTP
         user.set_password(new_password)
         user.save()
 
