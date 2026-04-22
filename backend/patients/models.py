@@ -226,3 +226,22 @@ class Task(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.assigned_to.username}"
+    
+class LabReport(models.Model):
+    # Link it to the patient and the specific admission
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='lab_reports')
+    admission = models.ForeignKey('Admission', on_delete=models.CASCADE, related_name='lab_reports', null=True, blank=True)
+    
+    report_name = models.CharField(max_length=255) # e.g., "KIDNEY FUNCTION TEST"
+    
+    # Stores the table rows [{"name": "BLOOD UREA", "value": "47", "normal": "(13-45 mg/dl)"}]
+    table_data = models.JSONField(default=list)
+    
+    # Stores the pre-filled paragraphs [{"title": "COMMENTS", "text": "The typhidot test..."}]
+    text_data = models.JSONField(default=list, blank=True)
+    
+    created_by = models.CharField(max_length=255, blank=True, null=True) # E.g., the receptionist's name
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.report_name} for {self.patient.uhid}"

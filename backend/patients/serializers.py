@@ -3,6 +3,7 @@ from django.db import transaction
 from django.utils import timezone
 from .models import Patient, Admission, MedicalHistory, Discharge, Service, Billing, ServiceMaster, DischargeSummary
 from .models import Task
+from .models import LabReport
 
 class ServiceMasterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -193,3 +194,9 @@ class TaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Task
         fields = '__all__'
+
+class LabReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LabReport
+        fields = '__all__'
+        read_only_fields = ['patient', 'admission', 'created_by', 'created_at']

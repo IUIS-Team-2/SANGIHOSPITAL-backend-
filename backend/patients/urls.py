@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import PatientViewSet, PrintDischargeSummaryView, ServiceMasterViewSet, DynamicDischargeSummaryView
 from .views import TaskListCreateAPIView, TaskDetailAPIView, TaskReportAPIView
+from .views import LabReportListCreateView
 
 router = DefaultRouter()
 router.register(r'patients', PatientViewSet)
@@ -14,4 +15,5 @@ urlpatterns = [
     path('tasks/', TaskListCreateAPIView.as_view(), name='task-list-create'),
     path('tasks/<int:pk>/', TaskDetailAPIView.as_view(), name='task-detail'),
     path('tasks/report/', TaskReportAPIView.as_view(), name='task-report'),
+    path('patients/<str:uhid>/admissions/<int:adm_no>/lab-reports/', LabReportListCreateView.as_view(), name='lab-reports'),
 ]

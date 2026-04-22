@@ -13,7 +13,8 @@ from .models import (
     Service, 
     Billing, 
     ServiceMaster,
-    DischargeSummary
+    DischargeSummary,
+    LabReport
 )
 from .serializers import (
     PatientSerializer, 
@@ -39,6 +40,7 @@ from users.models import CustomUser
 from rest_framework import generics
 from .models import Task
 from .serializers import TaskSerializer
+from .serializers import LabReportSerializer
 
 class PatientViewSet(viewsets.ModelViewSet):
     queryset = Patient.objects.all().order_by('-created_at')
@@ -55,23 +57,24 @@ class PatientViewSet(viewsets.ModelViewSet):
         if user.role in ['superadmin', 'office_admin']:
             return queryset
             
-        # 2. Branch Admin sees their branch
-        elif user.role == 'admin':
+        # 2. 🌟 THE FIX: Branch Admin AND Receptionists see their branch's patients!
+        elif user.role in ['admin', 'receptionist']:
             return queryset.filter(branch_location=user.branch)
             
         # 3. HOD sees tasks assigned to them, OR tasks they assigned to their department
         elif user.role == 'hod':
+            from django.db import models # Ensure models is imported for Q objects
             return queryset.filter(
                 models.Q(assigned_tasks__assigned_to=user) | 
                 models.Q(assigned_tasks__assigned_by=user)
             ).distinct()
 
-        # 🌟 4. THE TASK FILTER: Staff only see patients explicitly assigned to them!
+        # 4. Staff only see patients explicitly assigned to them via Task Manager!
         elif user.role in ['billing', 'opd', 'intimation', 'query', 'uploading']:
             return queryset.filter(assigned_tasks__assigned_to=user).distinct()
 
         return queryset.none()
-
+    
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
         
@@ -495,3 +498,26 @@ class TaskListCreateAPIView(generics.ListCreateAPIView):
 class TaskDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = TaskSerializer
     queryset = Task.objects.all()
+
+class LabReportListCreateView(generics.ListCreateAPIView):
+    serializer_class = LabReportSerializer
+
+    def get_queryset(self):
+        uhid = self.kwargs.get('uhid')
+        adm_no = self.kwargs.get('adm_no')
+        return LabReport.objects.filter(patient__uhid=uhid, admission__admNo=adm_no)
+
+    def perform_create(self, serializer):
+        uhid = self.kwargs.get('uhid')
+        adm_no = self.kwargs.get('adm_no')
+        
+        # 1. Safely find the exact Patient and Admission from the database
+        patient = get_object_or_404(Patient, uhid=uhid)
+        admission = get_object_or_404(Admission, patient=patient, admNo=adm_no)
+        
+        # 2. Save the report and link it automatically!
+        serializer.save(
+            patient=patient, 
+            admission=admission,
+            created_by=self.request.user.first_name or self.request.user.username
+        )
