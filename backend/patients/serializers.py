@@ -1,9 +1,20 @@
 from rest_framework import serializers
 from django.db import transaction
 from django.utils import timezone
-from .models import Patient, Admission, MedicalHistory, Discharge, Service, Billing, ServiceMaster, DischargeSummary
-from .models import Task
-from .models import LabReport
+from .models import (
+    Patient,
+    Admission,
+    MedicalHistory,
+    Discharge,
+    Service,
+    Billing,
+    ServiceMaster,
+    DischargeSummary,
+    Task,
+    LabReport,
+    HODReview,
+    DepartmentLogEntry,
+)
 
 class ServiceMasterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -104,11 +115,17 @@ class AdmissionSerializer(serializers.ModelSerializer):
     medicalHistory = MedicalHistorySerializer(read_only=True)
     discharge = DischargeSerializer(read_only=True)
     services = ServiceSerializer(many=True, read_only=True)
-    billing = BillingSerializer(read_only=True)
+    billing = serializers.SerializerMethodField()
 
     class Meta:
         model = Admission
         fields = '__all__'
+
+    def get_billing(self, obj):
+        billing = obj.bills.order_by('-id').first()
+        if not billing:
+            return None
+        return BillingSerializer(billing, context=self.context).data
         
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -190,13 +207,37 @@ class DischargeSummarySerializer(serializers.ModelSerializer):
 class TaskSerializer(serializers.ModelSerializer):
     assigned_by_name = serializers.CharField(source='assigned_by.get_full_name', read_only=True)
     assigned_to_name = serializers.CharField(source='assigned_to.get_full_name', read_only=True)
+    patient_uhids = serializers.SerializerMethodField()
+    patient_names = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
         fields = '__all__'
+
+    def get_patient_uhids(self, obj):
+        return list(obj.patients.values_list('uhid', flat=True))
+
+    def get_patient_names(self, obj):
+        return list(obj.patients.values_list('patientName', flat=True))
 
 class LabReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = LabReport
         fields = '__all__'
         read_only_fields = ['patient', 'admission', 'created_by', 'created_at']
+
+class HODReviewSerializer(serializers.ModelSerializer):
+    employeeName = serializers.CharField(source='employee.get_full_name', read_only=True)
+    employeeId = serializers.IntegerField(source='employee.id', read_only=True)
+    submittedAt = serializers.DateTimeField(source='created_at', read_only=True)
+
+    class Meta:
+        model = HODReview
+        fields = '__all__'
+        read_only_fields = ['reviewed_by', 'created_at']
+
+class DepartmentLogEntrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DepartmentLogEntry
+        fields = '__all__'
+        read_only_fields = ['created_by', 'created_at', 'updated_at']

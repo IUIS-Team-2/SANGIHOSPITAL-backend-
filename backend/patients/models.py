@@ -55,9 +55,16 @@ class Patient(models.Model):
         return f"{self.uhid} - {self.patientName}"
 
 class Admission(models.Model):
+    ADMISSION_TYPE_CHOICES = (
+        ('IPD', 'IPD'),
+        ('OPD', 'OPD'),
+        ('DayCare', 'Day Care'),
+    )
+
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='admissions')
     ipdNo = models.CharField(max_length=50, unique=True, blank=True)
     admNo = models.PositiveIntegerField()
+    admissionType = models.CharField(max_length=20, choices=ADMISSION_TYPE_CHOICES, default='IPD')
     dateTime = models.DateTimeField(default=timezone.now) 
     
     class Meta:
@@ -65,6 +72,10 @@ class Admission(models.Model):
 
     def __str__(self):
         return f"{self.patient.uhid} - Adm #{self.admNo} ({self.ipdNo})"
+
+    @property
+    def billing(self):
+        return self.bills.order_by('-id').first()
     
     def save(self, *args, **kwargs):
         if not self.ipdNo:
@@ -134,8 +145,11 @@ class Billing(models.Model):
     ]
     bill_type = models.CharField(max_length=20, choices=BILL_TYPE_CHOICES, default='CASH') # ✨ NEW
     
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    advance = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    remarks = models.TextField(blank=True)
     paymentMode = models.CharField(max_length=50, blank=True)
-    paidNow = models.BooleanField(default=False)  
+    paidNow = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     printStatus = models.CharField(max_length=50, default='DRAFT') 
     printRequestedAt = models.DateTimeField(null=True, blank=True)
 
@@ -200,6 +214,7 @@ class Task(models.Model):
         ('In Progress', 'In Progress'),
         ('Completed', 'Completed'),
         ('On Hold', 'On Hold'),
+        ('Overdue', 'Overdue'),
     )
     
     title = models.CharField(max_length=255)
@@ -226,7 +241,7 @@ class Task(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.assigned_to.username}"
-    
+
 class LabReport(models.Model):
     # Link it to the patient and the specific admission
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='lab_reports')
@@ -245,3 +260,49 @@ class LabReport(models.Model):
 
     def __str__(self):
         return f"{self.report_name} for {self.patient.uhid}"
+
+class HODReview(models.Model):
+    PERIOD_CHOICES = (
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+    )
+
+    department = models.CharField(max_length=100)
+    employee = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='hod_reviews')
+    reviewed_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='submitted_hod_reviews')
+    period = models.CharField(max_length=20, choices=PERIOD_CHOICES, default='weekly')
+    rating = models.PositiveSmallIntegerField(default=5)
+    performance_score = models.CharField(max_length=100, blank=True)
+    comments = models.TextField(blank=True)
+    task_name = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.employee.username} review ({self.department})"
+
+class DepartmentLogEntry(models.Model):
+    DEPARTMENT_CHOICES = (
+        ('opd', 'OPD'),
+        ('intimation', 'Intimation'),
+        ('query', 'Query'),
+        ('uploading', 'Uploading'),
+    )
+
+    BRANCH_CHOICES = (
+        ('LNM', 'Laxmi Nagar'),
+        ('RYM', 'Raya'),
+    )
+
+    department = models.CharField(max_length=20, choices=DEPARTMENT_CHOICES)
+    branch = models.CharField(max_length=10, choices=BRANCH_CHOICES, default='LNM')
+    record_date = models.DateField()
+    data = models.JSONField(default=dict)
+    created_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='department_logs_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-record_date', '-created_at']
+
+    def __str__(self):
+        return f"{self.department} log ({self.branch}) - {self.record_date}"

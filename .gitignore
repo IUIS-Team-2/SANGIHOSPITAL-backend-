@@ -39,3 +39,7 @@ yarn-debug.log*
 yarn-error.log*
 
 venv/*
+
+# Python cache
+__pycache__/
+*.py[cod]

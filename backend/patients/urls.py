@@ -1,8 +1,24 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import PatientViewSet, PrintDischargeSummaryView, ServiceMasterViewSet, DynamicDischargeSummaryView
-from .views import TaskListCreateAPIView, TaskDetailAPIView, TaskReportAPIView
-from .views import LabReportListCreateView
+from .views import (
+    PatientViewSet,
+    PrintDischargeSummaryView,
+    ServiceMasterViewSet,
+    DynamicDischargeSummaryView,
+    TaskListCreateAPIView,
+    TaskDetailAPIView,
+    TaskReportAPIView,
+    HODEmployeeListAPIView,
+    HODTaskListCreateAPIView,
+    HODTaskDetailAPIView,
+    HODAnalyticsAPIView,
+    HODReviewListCreateAPIView,
+    HODReportDownloadAPIView,
+    PerformanceRatingsAPIView,
+    DepartmentLogListAPIView,
+    DepartmentLogBulkSaveAPIView,
+    LabReportListCreateView,
+)
 
 router = DefaultRouter()
 router.register(r'patients', PatientViewSet)
@@ -12,6 +28,15 @@ urlpatterns = [
     path('patients/<str:uhid>/admissions/<str:adm_no>/dynamic-summary/', DynamicDischargeSummaryView.as_view(), name='dynamic-summary'),
     path('', include(router.urls)),
     path('patients/<str:uhid>/admissions/<str:adm_no>/dynamic-summary/print/', PrintDischargeSummaryView.as_view(), name='print-summary'),
+    path('hod/employees/', HODEmployeeListAPIView.as_view(), name='hod-employees'),
+    path('hod/tasks/', HODTaskListCreateAPIView.as_view(), name='hod-tasks'),
+    path('hod/tasks/<int:pk>/', HODTaskDetailAPIView.as_view(), name='hod-task-detail'),
+    path('hod/analytics/', HODAnalyticsAPIView.as_view(), name='hod-analytics'),
+    path('hod/reviews/', HODReviewListCreateAPIView.as_view(), name='hod-reviews'),
+    path('hod/reports/download/', HODReportDownloadAPIView.as_view(), name='hod-reports-download'),
+    path('hod/performance-ratings/', PerformanceRatingsAPIView.as_view(), name='hod-performance-ratings'),
+    path('department-logs/', DepartmentLogListAPIView.as_view(), name='department-logs'),
+    path('department-logs/bulk-save/', DepartmentLogBulkSaveAPIView.as_view(), name='department-logs-bulk-save'),
     path('tasks/', TaskListCreateAPIView.as_view(), name='task-list-create'),
     path('tasks/<int:pk>/', TaskDetailAPIView.as_view(), name='task-detail'),
     path('tasks/report/', TaskReportAPIView.as_view(), name='task-report'),
