@@ -31,14 +31,38 @@ Follow these steps to run the complete Full-Stack application locally on your ma
 * Git
 
 ### 2. Database Setup (Docker)
-We use a custom port (`5433`) to avoid conflicts with any local Windows database installations. Run the following command:
+We use PostgreSQL on port `5433`. The backend reads these values from `.env`:
+
+```env
+DB_NAME=sangi_hospital
+DB_USER=postgres
+DB_PASSWORD=admin123
+DB_HOST=127.0.0.1
+DB_PORT=5433
+```
+
+If you do not already have the container, create it:
+
 ```bash
 docker run --name postgres-sangi -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=admin123 -e POSTGRES_DB=sangi_hospital -p 5433:5432 -d postgres
+```
 
----
+If the container already exists and is only stopped, start it instead:
 
- 3. Backend Setup
+```bash
+docker start postgres-sangi
+```
 
+You can verify PostgreSQL is running with:
+
+```bash
+docker ps
+docker exec -it postgres-sangi psql -U postgres -d sangi_hospital -c '\l'
+```
+
+### 3. Backend Setup
+
+```bash
 # Navigate to the backend directory
 cd backend
 
@@ -48,19 +72,19 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install requirements
 pip install -r requirements.txt
-pip install openpyxl  # Required for Master Tariff Excel import
-pip install xhtml2pdf
 
-# Run database migrations
-python manage.py makemigrations
+# Apply migrations
 python manage.py migrate
+
+# Optional: create admin user
+python manage.py createsuperuser
 
 # Import Master Data (Prices & Codes) from Excel
 python import_data.py
 
 # Start the Django server
 python manage.py runserver
-
+```
 
 🔒 User Roles & Workflows
 Super Admin: Can view all branches, see live revenue/occupancy dashboards, and explicitly APPROVE or REJECT invoice print requests.

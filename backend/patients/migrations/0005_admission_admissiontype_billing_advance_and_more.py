@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('patients', '0004_alter_servicemaster_description'),
+        ('patients', '0005_labreport_task'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -33,10 +33,32 @@ class Migration(migrations.Migration):
             name='remarks',
             field=models.TextField(blank=True),
         ),
-        migrations.AlterField(
-            model_name='billing',
-            name='paidNow',
-            field=models.DecimalField(decimal_places=2, default=0, max_digits=10),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunSQL(
+                    sql="""
+                    ALTER TABLE patients_billing ALTER COLUMN "paidNow" DROP DEFAULT;
+                    ALTER TABLE patients_billing
+                    ALTER COLUMN "paidNow" TYPE numeric(10, 2)
+                    USING CASE WHEN "paidNow" IS TRUE THEN 1.00 ELSE 0.00 END;
+                    ALTER TABLE patients_billing ALTER COLUMN "paidNow" SET DEFAULT 0;
+                    """,
+                    reverse_sql="""
+                    ALTER TABLE patients_billing ALTER COLUMN "paidNow" DROP DEFAULT;
+                    ALTER TABLE patients_billing
+                    ALTER COLUMN "paidNow" TYPE boolean
+                    USING CASE WHEN COALESCE("paidNow", 0) <> 0 THEN TRUE ELSE FALSE END;
+                    ALTER TABLE patients_billing ALTER COLUMN "paidNow" SET DEFAULT FALSE;
+                    """,
+                ),
+            ],
+            state_operations=[
+                migrations.AlterField(
+                    model_name='billing',
+                    name='paidNow',
+                    field=models.DecimalField(decimal_places=2, default=0, max_digits=10),
+                ),
+            ],
         ),
         migrations.CreateModel(
             name='DepartmentLogEntry',
@@ -69,21 +91,19 @@ class Migration(migrations.Migration):
                 ('reviewed_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='submitted_hod_reviews', to=settings.AUTH_USER_MODEL)),
             ],
         ),
-        migrations.CreateModel(
-            name='Task',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('title', models.CharField(max_length=255)),
-                ('description', models.TextField(blank=True, null=True)),
-                ('department', models.CharField(max_length=100)),
-                ('priority', models.CharField(choices=[('Low', 'Low'), ('Medium', 'Medium'), ('High', 'High'), ('Urgent', 'Urgent')], default='Medium', max_length=20)),
-                ('status', models.CharField(choices=[('Pending', 'Pending'), ('In Progress', 'In Progress'), ('Completed', 'Completed'), ('On Hold', 'On Hold'), ('Overdue', 'Overdue')], default='Pending', max_length=20)),
-                ('due_date', models.DateTimeField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('assigned_by', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='tasks_given', to=settings.AUTH_USER_MODEL)),
-                ('assigned_to', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='tasks_received', to=settings.AUTH_USER_MODEL)),
-                ('patients', models.ManyToManyField(related_name='assigned_tasks', to='patients.patient')),
-            ],
+        migrations.AlterField(
+            model_name='task',
+            name='status',
+            field=models.CharField(
+                choices=[
+                    ('Pending', 'Pending'),
+                    ('In Progress', 'In Progress'),
+                    ('Completed', 'Completed'),
+                    ('On Hold', 'On Hold'),
+                    ('Overdue', 'Overdue'),
+                ],
+                default='Pending',
+                max_length=20,
+            ),
         ),
     ]
