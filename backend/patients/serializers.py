@@ -226,6 +226,32 @@ class LabReportSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['patient', 'admission', 'created_by', 'created_at']
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Convert Database snake_case to Frontend camelCase
+        if 'report_name' in data:
+            data['reportName'] = data.pop('report_name')
+        if 'report_type' in data:
+            data['reportType'] = data.pop('report_type')
+        return data
+
+    def to_internal_value(self, data):
+        resource_data = data.copy()
+        
+        # Convert Frontend camelCase to Database snake_case
+        if 'reportName' in resource_data:
+            resource_data['report_name'] = resource_data.pop('reportName')
+        if 'reportType' in resource_data:
+            resource_data['report_type'] = resource_data.pop('reportType')
+            
+        # Provide safe fallbacks so Django doesn't throw 400 errors for missing trivial fields
+        if 'amount' not in resource_data:
+            resource_data['amount'] = 0.00
+        if 'ordered_by' not in resource_data:
+            resource_data['ordered_by'] = "Doctor"
+
+        return super().to_internal_value(resource_data)
+
 class HODReviewSerializer(serializers.ModelSerializer):
     employeeName = serializers.CharField(source='employee.get_full_name', read_only=True)
     employeeId = serializers.IntegerField(source='employee.id', read_only=True)
