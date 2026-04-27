@@ -1,5 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from . import views
 from .views import (
     PatientViewSet,
     PrintDischargeSummaryView,
@@ -20,9 +21,14 @@ from .views import (
     LabReportListCreateView,
 )
 
+
 router = DefaultRouter()
 router.register(r'patients', PatientViewSet)
 router.register(r'service-master', ServiceMasterViewSet)
+router.register(r'report-master', views.ReportMasterViewSet, basename='report-master')
+router.register(r'medicine-master', views.MedicineMasterViewSet, basename='medicine-master')
+
+
 
 urlpatterns = [
     path('patients/<str:uhid>/admissions/<str:adm_no>/dynamic-summary/', DynamicDischargeSummaryView.as_view(), name='dynamic-summary'),
@@ -41,4 +47,7 @@ urlpatterns = [
     path('tasks/<int:pk>/', TaskDetailAPIView.as_view(), name='task-detail'),
     path('tasks/report/', TaskReportAPIView.as_view(), name='task-report'),
     path('patients/<str:uhid>/admissions/<int:adm_no>/lab-reports/', LabReportListCreateView.as_view(), name='lab-reports'),
+    path('patients/<str:uhid>/admissions/<str:adm_no>/pharmacy-records/', views.PharmacyRecordViewSet.as_view({'get': 'list', 'post': 'create'}), name='pharmacy-records-list'),
+ path('patients/<str:uhid>/admissions/<str:adm_no>/pharmacy-records/<int:pk>/', views.PharmacyRecordViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='pharmacy-records-detail'),
+    
 ]

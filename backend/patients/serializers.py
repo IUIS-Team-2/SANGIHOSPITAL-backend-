@@ -14,8 +14,10 @@ from .models import (
     LabReport,
     HODReview,
     DepartmentLogEntry,
+    ReportMaster,      
+    MedicineMaster,    
+    PharmacyRecord,    
 )
-
 class ServiceMasterSerializer(serializers.ModelSerializer):
     class Meta:
         model = ServiceMaster
@@ -267,3 +269,38 @@ class DepartmentLogEntrySerializer(serializers.ModelSerializer):
         model = DepartmentLogEntry
         fields = '__all__'
         read_only_fields = ['created_by', 'created_at', 'updated_at']
+
+class ReportMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReportMaster
+        fields = '__all__'
+
+class MedicineMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MedicineMaster
+        fields = '__all__'
+
+class PharmacyRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PharmacyRecord
+        fields = '__all__'
+        read_only_fields = ['patient', 'admission', 'created_by', 'created_at']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Convert snake_case to camelCase for the frontend
+        if 'date_given' in data: data['date'] = data.pop('date_given')
+        if 'medicine_name' in data: data['name'] = data.pop('medicine_name')
+        if 'batch_no' in data: data['batch'] = data.pop('batch_no')
+        if 'expiry_date' in data: data['expiry'] = data.pop('expiry_date')
+        data['total'] = float(data.get('rate', 0)) * int(data.get('quantity', 1))
+        return data
+
+    def to_internal_value(self, data):
+        resource_data = data.copy()
+        # Convert frontend camelCase back to snake_case
+        if 'date' in resource_data: resource_data['date_given'] = resource_data.pop('date')
+        if 'name' in resource_data: resource_data['medicine_name'] = resource_data.pop('name')
+        if 'batch' in resource_data: resource_data['batch_no'] = resource_data.pop('batch')
+        if 'expiry' in resource_data: resource_data['expiry_date'] = resource_data.pop('expiry')
+        return super().to_internal_value(resource_data)

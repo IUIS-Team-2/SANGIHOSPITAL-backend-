@@ -306,3 +306,31 @@ class DepartmentLogEntry(models.Model):
 
     def __str__(self):
         return f"{self.department} log ({self.branch}) - {self.record_date}"
+
+class ReportMaster(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+
+    def __str__(self):
+        return self.name
+
+class MedicineMaster(models.Model):
+    name = models.CharField(max_length=255)
+    batch_no = models.CharField(max_length=100, blank=True, null=True)
+    expiry_date = models.CharField(max_length=50, blank=True, null=True)
+    rate = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
+    def __str__(self):
+        return f"{self.name} - {self.batch_no}"
+
+class PharmacyRecord(models.Model):
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='pharmacy_records')
+    admission = models.ForeignKey(Admission, on_delete=models.CASCADE, related_name='pharmacy_records')
+    date_given = models.CharField(max_length=50)
+    medicine_name = models.CharField(max_length=255)
+    batch_no = models.CharField(max_length=100, blank=True, null=True)
+    expiry_date = models.CharField(max_length=50, blank=True, null=True)
+    quantity = models.IntegerField(default=1)
+    rate = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)

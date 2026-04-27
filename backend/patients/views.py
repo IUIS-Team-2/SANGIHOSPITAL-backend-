@@ -14,6 +14,9 @@ from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 from django.template.loader import render_to_string
+from rest_framework.permissions import IsAuthenticated
+
+from users import permissions
 from .models import (
     Patient,
     Admission,
@@ -46,6 +49,8 @@ from .templates import DISCHARGE_TEMPLATES
 import io
 from xhtml2pdf import pisa
 from users.models import CustomUser
+from .models import MedicineMaster, PharmacyRecord, ReportMaster
+from .serializers import MedicineMasterSerializer, PharmacyRecordSerializer, ReportMasterSerializer
 
 DEPARTMENT_ROLE_MAP = {
     'Billing': 'billing',
@@ -959,3 +964,30 @@ class DepartmentLogBulkSaveAPIView(APIView):
                 DepartmentLogEntry.objects.bulk_create(created)
 
         return Response({'saved': len(entries)}, status=status.HTTP_200_OK)
+    
+class ReportMasterViewSet(viewsets.ModelViewSet):
+    queryset = ReportMaster.objects.all().order_by('name')
+    serializer_class = ReportMasterSerializer
+    permission_classes = [IsAuthenticated]
+
+class MedicineMasterViewSet(viewsets.ModelViewSet):
+    queryset = MedicineMaster.objects.all().order_by('name')
+    serializer_class = MedicineMasterSerializer
+    permission_classes = [IsAuthenticated]
+
+class PharmacyRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = PharmacyRecordSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Using exact kwarg names 'uhid' and 'adm_no' from urls.py
+        return PharmacyRecord.objects.filter(
+            patient__uhid=self.kwargs['uhid'],
+            admission__admNo=self.kwargs['adm_no']
+        )
+
+    def perform_create(self, serializer):
+        # Using exact kwarg names 'uhid' and 'adm_no' from urls.py
+        patient = get_object_or_404(Patient, uhid=self.kwargs['uhid'])
+        admission = get_object_or_404(Admission, admNo=self.kwargs['adm_no'], patient=patient)
+        serializer.save(patient=patient, admission=admission, created_by=self.request.user)

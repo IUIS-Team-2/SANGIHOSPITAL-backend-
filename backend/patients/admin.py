@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Patient, Admission, ServiceMaster, Service, Billing, Discharge, MedicalHistory
+from .models import Patient, Admission, MedicalHistory, Discharge, Service, Billing, ServiceMaster, DischargeSummary, Task, LabReport, HODReview, DepartmentLogEntry, ReportMaster, MedicineMaster, PharmacyRecord
 
 # This creates a nice table view for your Patients in the Admin panel
 @admin.register(Patient)
@@ -20,3 +20,6 @@ admin.site.register(Service)
 admin.site.register(Billing)
 admin.site.register(Discharge)
 admin.site.register(MedicalHistory)
+admin.site.register(ReportMaster)
+admin.site.register(MedicineMaster)
+admin.site.register(PharmacyRecord)
