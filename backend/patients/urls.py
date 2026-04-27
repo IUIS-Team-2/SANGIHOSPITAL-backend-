@@ -18,7 +18,10 @@ from .views import (
     PerformanceRatingsAPIView,
     DepartmentLogListAPIView,
     DepartmentLogBulkSaveAPIView,
+    ServiceBulkSaveAPIView,
     LabReportListCreateView,
+    LabReportBulkSaveAPIView,
+    PharmacyRecordBulkSaveAPIView,
 )
 
 
@@ -43,11 +46,13 @@ urlpatterns = [
     path('hod/performance-ratings/', PerformanceRatingsAPIView.as_view(), name='hod-performance-ratings'),
     path('department-logs/', DepartmentLogListAPIView.as_view(), name='department-logs'),
     path('department-logs/bulk-save/', DepartmentLogBulkSaveAPIView.as_view(), name='department-logs-bulk-save'),
+    path('patients/<str:uhid>/admissions/<str:adm_no>/services/bulk-save/', ServiceBulkSaveAPIView.as_view(), name='services-bulk-save'),
     path('tasks/', TaskListCreateAPIView.as_view(), name='task-list-create'),
     path('tasks/<int:pk>/', TaskDetailAPIView.as_view(), name='task-detail'),
     path('tasks/report/', TaskReportAPIView.as_view(), name='task-report'),
     path('patients/<str:uhid>/admissions/<int:adm_no>/lab-reports/', LabReportListCreateView.as_view(), name='lab-reports'),
+    path('patients/<str:uhid>/admissions/<str:adm_no>/lab-reports/bulk-save/', LabReportBulkSaveAPIView.as_view(), name='lab-reports-bulk-save'),
     path('patients/<str:uhid>/admissions/<str:adm_no>/pharmacy-records/', views.PharmacyRecordViewSet.as_view({'get': 'list', 'post': 'create'}), name='pharmacy-records-list'),
- path('patients/<str:uhid>/admissions/<str:adm_no>/pharmacy-records/<int:pk>/', views.PharmacyRecordViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='pharmacy-records-detail'),
-    
+    path('patients/<str:uhid>/admissions/<str:adm_no>/pharmacy-records/bulk-save/', PharmacyRecordBulkSaveAPIView.as_view(), name='pharmacy-records-bulk-save'),
+    path('patients/<str:uhid>/admissions/<str:adm_no>/pharmacy-records/<int:pk>/', views.PharmacyRecordViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='pharmacy-records-detail'),
 ]

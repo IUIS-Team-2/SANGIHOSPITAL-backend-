@@ -125,6 +125,8 @@ class Discharge(models.Model):
     expectedDod = models.DateField(null=True, blank=True)
     dod = models.DateTimeField(null=True, blank=True)
     dischargeStatus = models.CharField(max_length=100, blank=True)
+    instructions = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
 
 class Service(models.Model):    
     admission = models.ForeignKey('Admission', related_name='services', on_delete=models.CASCADE)
@@ -149,6 +151,9 @@ class Billing(models.Model):
     advance = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     remarks = models.TextField(blank=True)
     paymentMode = models.CharField(max_length=50, blank=True)
+    insuranceType = models.CharField(max_length=100, blank=True)
+    tpaInfo = models.JSONField(default=dict, blank=True)
+    tpaDocStatus = models.JSONField(default=dict, blank=True)
     paidNow = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     printStatus = models.CharField(max_length=50, default='DRAFT') 
     printRequestedAt = models.DateTimeField(null=True, blank=True)
@@ -248,6 +253,13 @@ class LabReport(models.Model):
     admission = models.ForeignKey('Admission', on_delete=models.CASCADE, related_name='lab_reports', null=True, blank=True)
     
     report_name = models.CharField(max_length=255) # e.g., "KIDNEY FUNCTION TEST"
+    report_type = models.CharField(max_length=100, blank=True)
+    report_category = models.CharField(max_length=50, blank=True)
+    report_date = models.DateField(null=True, blank=True)
+    ordered_by = models.CharField(max_length=255, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    remarks = models.TextField(blank=True)
+    modality_details = models.JSONField(default=dict, blank=True)
     
     # Stores the table rows [{"name": "BLOOD UREA", "value": "47", "normal": "(13-45 mg/dl)"}]
     table_data = models.JSONField(default=list)
@@ -334,3 +346,6 @@ class PharmacyRecord(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.medicine_name} for {self.patient.uhid}"

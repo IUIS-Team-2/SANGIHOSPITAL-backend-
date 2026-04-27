@@ -160,6 +160,64 @@ def get_or_create_current_billing(admission):
         return billing, False
     return Billing.objects.create(admission=admission), True
 
+def normalize_service_pricing(service_data, patient=None):
+    raw_pricing = str(
+        service_data.get('pricing_type')
+        or service_data.get('pricingApplied')
+        or service_data.get('pricing_applied')
+        or ''
+    ).strip().upper()
+    if raw_pricing in {'CASH', 'CASHLESS'}:
+        return raw_pricing
+    pay_mode = str(getattr(patient, 'payMode', '') or '').lower()
+    return 'CASHLESS' if 'cashless' in pay_mode else 'CASH'
+
+def resolve_service_defaults(service_data, patient=None):
+    svc_name = (
+        service_data.get('svcName')
+        or service_data.get('title')
+        or service_data.get('name')
+        or ''
+    ).strip()
+    if not svc_name:
+        raise ValueError('Service name (svcName) is required.')
+
+    pricing_applied = normalize_service_pricing(service_data, patient)
+    svc_date = service_data.get('svcDate') or service_data.get('date') or None
+
+    try:
+        svc_qty = int(service_data.get('svcQty') or service_data.get('qty') or 1)
+    except (TypeError, ValueError):
+        svc_qty = 1
+    svc_qty = max(1, svc_qty)
+
+    master_service = ServiceMaster.objects.filter(
+        description__iexact=svc_name,
+        pricing_type=pricing_applied,
+    ).first()
+
+    if master_service:
+        svc_rate = master_service.rate
+        svc_cat = master_service.category
+    else:
+        raw_rate = service_data.get('svcRate') or service_data.get('rate') or 0
+        raw_cat = service_data.get('svcCat') or service_data.get('type') or 'GENERAL SERVICES'
+        try:
+            svc_rate = Decimal(str(raw_rate))
+        except (InvalidOperation, ValueError, TypeError):
+            svc_rate = Decimal('0')
+        svc_cat = raw_cat
+
+    return {
+        'svcName': svc_name,
+        'pricing_applied': pricing_applied,
+        'svcCat': svc_cat,
+        'svcQty': svc_qty,
+        'svcRate': svc_rate,
+        'svcTot': svc_rate * svc_qty,
+        'svcDate': svc_date,
+    }
+
 class PatientViewSet(viewsets.ModelViewSet):
     queryset = Patient.objects.all().order_by('-created_at')
     serializer_class = PatientSerializer
@@ -282,8 +340,12 @@ class PatientViewSet(viewsets.ModelViewSet):
                     
                 setattr(billing_obj, key, value)
 
-            pay_mode = str(getattr(patient, 'payMode', '') or '')
-            billing_obj.bill_type = 'CASHLESS' if 'cashless' in pay_mode.lower() else 'CASH'
+            pay_mode = str(getattr(patient, 'payMode', '') or billing_data.get('paymentMode') or '')
+            insurance_type = str(billing_data.get('insuranceType') or getattr(billing_obj, 'insuranceType', '') or '')
+            cashless_like = {'tpa', 'echs', 'eci', 'fci', 'ayushman bharat', 'northern railways', 'insurance'}
+            billing_obj.bill_type = 'CASHLESS' if (
+                'cashless' in pay_mode.lower() or insurance_type.strip().lower() in cashless_like
+            ) else 'CASH'
                 
             billing_obj.save()
             return Response({'status': 'Billing updated successfully'})
@@ -298,61 +360,60 @@ class PatientViewSet(viewsets.ModelViewSet):
         
         try:
             admission_obj, _ = Admission.objects.get_or_create(patient=patient, admNo=adm_no)
-            
-            # 1. Extract the secure, basic data sent from the frontend
-            svc_name = service_data.get('svcName')
-            # Look for the pricing type (defaults to CASH if not provided)
-            pricing_applied = service_data.get('pricing_type', 'CASH').upper() 
-            svc_qty = int(service_data.get('svcQty', 1))
-            svc_date = service_data.get('svcDate')
-            
-            if not svc_name:
-                return Response({'error': 'Service name (svcName) is required.'}, status=status.HTTP_400_BAD_REQUEST)
-                
-            # ✨ 2. AUTOMATED SECURE PRICING LOGIC
-            # Query the ServiceMaster DB to get the correct rate based on the pricing type
-            from .models import ServiceMaster # Ensuring it's imported
-            
-            master_service = ServiceMaster.objects.filter(
-                description__iexact=svc_name, 
-                pricing_type=pricing_applied
-            ).first()
-            
-            if master_service:
-                # 3. The Backend calculates the rate and total to prevent tampering
-                svc_rate = master_service.rate
-                svc_tot = svc_rate * svc_qty
-                svc_cat = master_service.category
-            else:
-                raw_rate = service_data.get('svcRate') or service_data.get('rate') or 0
-                raw_cat = service_data.get('svcCat') or service_data.get('type') or 'GENERAL SERVICES'
-                try:
-                    svc_rate = Decimal(str(raw_rate))
-                except (InvalidOperation, ValueError, TypeError):
-                    svc_rate = Decimal('0')
-                svc_tot = svc_rate * svc_qty
-                svc_cat = raw_cat
-
-            # 4. Save the service with the newly fetched data
+            defaults = resolve_service_defaults(service_data or {}, patient)
             service, created = Service.objects.update_or_create(
                 admission=admission_obj,
-                svcName=svc_name,  
-                pricing_applied=pricing_applied, # We use this in the lookup to separate Cash vs Cashless updates
+                svcName=defaults['svcName'],
+                pricing_applied=defaults['pricing_applied'],
                 defaults={
-                    'svcCat': svc_cat,
-                    'svcQty': svc_qty,
-                    'svcRate': svc_rate,
-                    'svcTot': svc_tot,
-                    'svcDate': svc_date
+                    'svcCat': defaults['svcCat'],
+                    'svcQty': defaults['svcQty'],
+                    'svcRate': defaults['svcRate'],
+                    'svcTot': defaults['svcTot'],
+                    'svcDate': defaults['svcDate'],
                 }
             )
             
-            from .serializers import ServiceSerializer # Ensuring serializer is ready
             return Response({
                 'status': 'Service added successfully with automated pricing.', 
                 'data': ServiceSerializer(service).data
             })
             
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class ServiceBulkSaveAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, uhid, adm_no):
+        patient = get_object_or_404(Patient, uhid=uhid)
+        admission_obj, _ = Admission.objects.get_or_create(patient=patient, admNo=adm_no)
+        services = request.data.get('services') or []
+
+        if not isinstance(services, list):
+            return Response({'error': 'services must be a list.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            serialized = []
+            with transaction.atomic():
+                admission_obj.services.all().delete()
+                created_services = []
+                for service_data in services:
+                    defaults = resolve_service_defaults(service_data or {}, patient)
+                    created_services.append(Service(
+                        admission=admission_obj,
+                        svcName=defaults['svcName'],
+                        pricing_applied=defaults['pricing_applied'],
+                        svcCat=defaults['svcCat'],
+                        svcQty=defaults['svcQty'],
+                        svcRate=defaults['svcRate'],
+                        svcTot=defaults['svcTot'],
+                        svcDate=defaults['svcDate'],
+                    ))
+                if created_services:
+                    Service.objects.bulk_create(created_services)
+                serialized = ServiceSerializer(admission_obj.services.order_by('svcDate', 'id'), many=True).data
+            return Response({'saved': len(serialized), 'services': serialized}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -636,22 +697,61 @@ class LabReportListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         uhid = self.kwargs.get('uhid')
         adm_no = self.kwargs.get('adm_no')
-        return LabReport.objects.filter(patient__uhid=uhid, admission__admNo=adm_no)
+        return LabReport.objects.filter(patient__uhid=uhid, admission__admNo=adm_no).order_by('report_date', 'id')
 
     def perform_create(self, serializer):
         uhid = self.kwargs.get('uhid')
         adm_no = self.kwargs.get('adm_no')
         
-        # 1. Safely find the exact Patient and Admission from the database
         patient = get_object_or_404(Patient, uhid=uhid)
         admission = get_object_or_404(Admission, patient=patient, admNo=adm_no)
-        
-        # 2. Save the report and link it automatically!
-        serializer.save(
-            patient=patient, 
-            admission=admission,
-            created_by=self.request.user.first_name or self.request.user.username
-        )
+
+        lookup = {
+            'patient': patient,
+            'admission': admission,
+            'report_name': serializer.validated_data.get('report_name'),
+            'report_type': serializer.validated_data.get('report_type', ''),
+            'report_date': serializer.validated_data.get('report_date'),
+        }
+        defaults = {
+            **serializer.validated_data,
+            'created_by': self.request.user.first_name or self.request.user.username,
+        }
+        report, _ = LabReport.objects.update_or_create(defaults=defaults, **lookup)
+        serializer.instance = report
+
+class LabReportBulkSaveAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, uhid, adm_no):
+        patient = get_object_or_404(Patient, uhid=uhid)
+        admission = get_object_or_404(Admission, patient=patient, admNo=adm_no)
+        reports = request.data.get('reports') or []
+
+        created_by = request.user.first_name or request.user.username
+        created_reports = []
+
+        with transaction.atomic():
+            LabReport.objects.filter(patient=patient, admission=admission).delete()
+
+            for report in reports:
+                serializer = LabReportSerializer(data=report)
+                serializer.is_valid(raise_exception=True)
+                created_reports.append(LabReport(
+                    patient=patient,
+                    admission=admission,
+                    created_by=created_by,
+                    **serializer.validated_data,
+                ))
+
+            if created_reports:
+                LabReport.objects.bulk_create(created_reports)
+
+        payload = LabReportSerializer(
+            LabReport.objects.filter(patient=patient, admission=admission).order_by('report_date', 'id'),
+            many=True,
+        ).data
+        return Response(payload, status=status.HTTP_200_OK)
 
 class HODEmployeeListAPIView(APIView):
     def get(self, request):
@@ -987,7 +1087,48 @@ class PharmacyRecordViewSet(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
-        # Using exact kwarg names 'uhid' and 'adm_no' from urls.py
         patient = get_object_or_404(Patient, uhid=self.kwargs['uhid'])
         admission = get_object_or_404(Admission, admNo=self.kwargs['adm_no'], patient=patient)
-        serializer.save(patient=patient, admission=admission, created_by=self.request.user)
+        lookup = {
+            'patient': patient,
+            'admission': admission,
+            'medicine_name': serializer.validated_data.get('medicine_name'),
+            'date_given': serializer.validated_data.get('date_given'),
+        }
+        defaults = {
+            **serializer.validated_data,
+            'created_by': self.request.user,
+        }
+        record, _ = PharmacyRecord.objects.update_or_create(defaults=defaults, **lookup)
+        serializer.instance = record
+
+class PharmacyRecordBulkSaveAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, uhid, adm_no):
+        patient = get_object_or_404(Patient, uhid=uhid)
+        admission = get_object_or_404(Admission, admNo=adm_no, patient=patient)
+        records = request.data.get('records') or []
+
+        created_records = []
+        with transaction.atomic():
+            PharmacyRecord.objects.filter(patient=patient, admission=admission).delete()
+
+            for record in records:
+                serializer = PharmacyRecordSerializer(data=record)
+                serializer.is_valid(raise_exception=True)
+                created_records.append(PharmacyRecord(
+                    patient=patient,
+                    admission=admission,
+                    created_by=request.user,
+                    **serializer.validated_data,
+                ))
+
+            if created_records:
+                PharmacyRecord.objects.bulk_create(created_records)
+
+        payload = PharmacyRecordSerializer(
+            PharmacyRecord.objects.filter(patient=patient, admission=admission).order_by('date_given', 'id'),
+            many=True,
+        ).data
+        return Response(payload, status=status.HTTP_200_OK)

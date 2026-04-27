@@ -118,6 +118,8 @@ class AdmissionSerializer(serializers.ModelSerializer):
     discharge = DischargeSerializer(read_only=True)
     services = ServiceSerializer(many=True, read_only=True)
     billing = serializers.SerializerMethodField()
+    labReports = serializers.SerializerMethodField()
+    pharmacyRecords = serializers.SerializerMethodField()
 
     class Meta:
         model = Admission
@@ -128,6 +130,14 @@ class AdmissionSerializer(serializers.ModelSerializer):
         if not billing:
             return None
         return BillingSerializer(billing, context=self.context).data
+
+    def get_labReports(self, obj):
+        reports = obj.lab_reports.order_by('report_date', 'id')
+        return LabReportSerializer(reports, many=True, context=self.context).data
+
+    def get_pharmacyRecords(self, obj):
+        records = obj.pharmacy_records.order_by('date_given', 'id')
+        return PharmacyRecordSerializer(records, many=True, context=self.context).data
         
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -230,27 +240,48 @@ class LabReportSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        # Convert Database snake_case to Frontend camelCase
         if 'report_name' in data:
             data['reportName'] = data.pop('report_name')
         if 'report_type' in data:
             data['reportType'] = data.pop('report_type')
+        if 'report_category' in data:
+            data['reportCategory'] = data.pop('report_category')
+        if 'report_date' in data:
+            data['date'] = data.pop('report_date')
+        if 'ordered_by' in data:
+            data['orderedBy'] = data.pop('ordered_by')
+        if 'modality_details' in data:
+            data['modalityDetails'] = data.pop('modality_details')
+        if 'table_data' in data:
+            data['tests'] = data.pop('table_data')
         return data
 
     def to_internal_value(self, data):
         resource_data = data.copy()
-        
-        # Convert Frontend camelCase to Database snake_case
+
         if 'reportName' in resource_data:
             resource_data['report_name'] = resource_data.pop('reportName')
         if 'reportType' in resource_data:
             resource_data['report_type'] = resource_data.pop('reportType')
-            
-        # Provide safe fallbacks so Django doesn't throw 400 errors for missing trivial fields
+        if 'reportCategory' in resource_data:
+            resource_data['report_category'] = resource_data.pop('reportCategory')
+        if 'date' in resource_data:
+            resource_data['report_date'] = resource_data.pop('date')
+        if 'orderedBy' in resource_data:
+            resource_data['ordered_by'] = resource_data.pop('orderedBy')
+        if 'modalityDetails' in resource_data:
+            resource_data['modality_details'] = resource_data.pop('modalityDetails')
+        if 'tests' in resource_data:
+            resource_data['table_data'] = resource_data.pop('tests')
+
         if 'amount' not in resource_data:
             resource_data['amount'] = 0.00
         if 'ordered_by' not in resource_data:
             resource_data['ordered_by'] = "Doctor"
+        if 'report_type' not in resource_data:
+            resource_data['report_type'] = "Pathology"
+        if 'report_date' not in resource_data and 'date' in data:
+            resource_data['report_date'] = data.get('date')
 
         return super().to_internal_value(resource_data)
 
