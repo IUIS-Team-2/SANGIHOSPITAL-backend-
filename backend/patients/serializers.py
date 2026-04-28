@@ -216,16 +216,6 @@ class DischargeSummarySerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['created_at', 'updated_at', 'created_by']
 
-class TaskSerializer(serializers.ModelSerializer):
-    assigned_by_name = serializers.CharField(source='assigned_by.get_full_name', read_only=True)
-    assigned_to_name = serializers.CharField(source='assigned_to.get_full_name', read_only=True)
-    patient_uhids = serializers.SerializerMethodField()
-    patient_names = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Task
-        fields = '__all__'
-
     def get_patient_uhids(self, obj):
         return list(obj.patients.values_list('uhid', flat=True))
 
@@ -335,3 +325,21 @@ class PharmacyRecordSerializer(serializers.ModelSerializer):
         if 'batch' in resource_data: resource_data['batch_no'] = resource_data.pop('batch')
         if 'expiry' in resource_data: resource_data['expiry_date'] = resource_data.pop('expiry')
         return super().to_internal_value(resource_data)
+    
+class TaskSerializer(serializers.ModelSerializer):
+    patient_name = serializers.CharField(source='patient.patientName', read_only=True)
+    patient_uhid = serializers.CharField(source='patient.uhid', read_only=True)
+    assigned_to_name = serializers.CharField(source='assigned_to.username', read_only=True)
+    assigned_by_name = serializers.CharField(source='assigned_by.username', read_only=True)
+
+    class Meta:
+        model = Task
+        fields = '__all__'
+
+class BulkTaskAssignSerializer(serializers.Serializer):
+    assign_to = serializers.IntegerField()
+    patient_ids = serializers.ListField(
+        child=serializers.IntegerField(), allow_empty=False
+    )
+    department = serializers.CharField(max_length=100)
+    title = serializers.CharField(max_length=255, required=False, default="Patient Billing Task")

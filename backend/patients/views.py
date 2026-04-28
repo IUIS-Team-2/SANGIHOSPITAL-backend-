@@ -15,7 +15,6 @@ from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 from rest_framework.permissions import IsAuthenticated
-
 from users import permissions
 from .models import (
     Patient,
@@ -42,7 +41,7 @@ from .serializers import (
     TaskSerializer,
     LabReportSerializer,
     HODReviewSerializer,
-    DepartmentLogEntrySerializer,
+    DepartmentLogEntrySerializer, BulkTaskAssignSerializer
 )
 import copy
 from .templates import DISCHARGE_TEMPLATES
@@ -1132,3 +1131,112 @@ class PharmacyRecordBulkSaveAPIView(APIView):
             many=True,
         ).data
         return Response(payload, status=status.HTTP_200_OK)
+
+class TaskEligibleEmployeesAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        
+        # 👇 FIXED: Using exact database role keys (lowercase)
+        if user.role == 'office_admin':
+            employees = CustomUser.objects.filter(role__in=['hod', 'billing'])
+        elif user.role == 'hod':
+            employees = CustomUser.objects.filter(role='billing')
+        elif user.role == 'superadmin':
+            employees = CustomUser.objects.all()
+        else:
+            employees = CustomUser.objects.none()
+            
+        # 👇 FIXED: Changed emp.name to emp.username, changed emp.role to emp.get_role_display(), removed emp.department
+        data = [{"id": emp.id, "name": emp.username, "role": emp.get_role_display()} for emp in employees]
+        return Response(data)
+
+class BulkTaskAssignAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = BulkTaskAssignSerializer(data=request.data)
+        if serializer.is_valid():
+            assign_to_id = serializer.validated_data['assign_to']
+            patient_ids = serializer.validated_data['patient_ids']
+            department = serializer.validated_data['department']
+            title = serializer.validated_data.get('title', 'Patient Task')
+
+            try:
+                assigned_to_user = CustomUser.objects.get(id=assign_to_id)
+            except CustomUser.DoesNotExist:
+                return Response({"error": "Assigned user not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            tasks_to_create = []
+            for pid in patient_ids:
+                try:
+                    patient = Patient.objects.get(id=pid)
+                    tasks_to_create.append(
+                        Task(
+                            title=title,
+                            assigned_by=request.user,
+                            assigned_to=assigned_to_user,
+                            department=department,
+                            patient=patient,
+                            status='Pending'
+                        )
+                    )
+                except Patient.DoesNotExist:
+                    continue
+
+            Task.objects.bulk_create(tasks_to_create)
+            # 👇 FIXED: Changed assigned_to_user.name to .username
+            return Response({"message": f"Successfully assigned {len(tasks_to_create)} patients to {assigned_to_user.username}."}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class TaskAnalyticsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        
+        # 👇 FIXED: Using exact database role keys (lowercase)
+        if user.role not in ['superadmin', 'office_admin', 'hod']:
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        if user.role == 'hod':
+            qs = Task.objects.filter(assigned_by=user)
+        else:
+            qs = Task.objects.all()
+
+        # 👇 FIXED: Changed assigned_to__name to assigned_to__username
+        analytics = qs.values(
+            'assigned_to__id', 
+            'assigned_to__username', 
+            'assigned_to__role'
+        ).annotate(
+            total_tasks=Count('id'),
+            completed_tasks=Count('id', filter=Q(status='Completed')),
+            pending_tasks=Count('id', filter=Q(status='Pending'))
+        )
+        return Response(analytics)
+    
+class EmployeeTaskUpdateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, task_id):
+        try:
+            task = Task.objects.get(id=task_id, assigned_to=request.user)
+        except Task.DoesNotExist:
+            return Response({"error": "Task not found or not assigned to you."}, status=status.HTTP_404_NOT_FOUND)
+        
+        new_status = request.data.get('status')
+        if new_status in dict(Task.STATUS_CHOICES):
+            task.status = new_status
+            task.save()
+            return Response({"message": "Task updated successfully", "status": task.status})
+        return Response({"error": "Invalid status."}, status=status.HTTP_400_BAD_REQUEST)
+
+class EmployeeMyTasksAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        tasks = Task.objects.filter(assigned_to=request.user).order_by('-created_at')
+        serializer = TaskSerializer(tasks, many=True)
+        return Response(serializer.data)

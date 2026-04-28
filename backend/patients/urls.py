@@ -55,4 +55,9 @@ urlpatterns = [
     path('patients/<str:uhid>/admissions/<str:adm_no>/pharmacy-records/', views.PharmacyRecordViewSet.as_view({'get': 'list', 'post': 'create'}), name='pharmacy-records-list'),
     path('patients/<str:uhid>/admissions/<str:adm_no>/pharmacy-records/bulk-save/', PharmacyRecordBulkSaveAPIView.as_view(), name='pharmacy-records-bulk-save'),
     path('patients/<str:uhid>/admissions/<str:adm_no>/pharmacy-records/<int:pk>/', views.PharmacyRecordViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='pharmacy-records-detail'),
+    path('tasks/eligible-employees/', views.TaskEligibleEmployeesAPIView.as_view(), name='task-eligible-employees'),
+    path('tasks/bulk-assign/', views.BulkTaskAssignAPIView.as_view(), name='task-bulk-assign'),
+    path('tasks/analytics/', views.TaskAnalyticsAPIView.as_view(), name='task-analytics'),
+    path('tasks/<int:task_id>/update-status/', views.EmployeeTaskUpdateAPIView.as_view(), name='task-update-status'),
+    path('tasks/my-tasks/', views.EmployeeMyTasksAPIView.as_view(), name='task-my-tasks'),
 ]

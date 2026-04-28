@@ -234,8 +234,8 @@ class Task(models.Model):
     # Which department does this task belong to?
     department = models.CharField(max_length=100) 
     
-    # 🌟 MULTI-SELECT PATIENTS: Link the specific cashless patients to this task!
-    patients = models.ManyToManyField(Patient, related_name='assigned_tasks')
+    # 🌟 SINGLE PATIENT TRACKING: 1 Task = 1 Patient
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='assigned_tasks', null=True, blank=True)
     
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='Medium')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
