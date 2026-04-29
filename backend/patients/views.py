@@ -8,6 +8,7 @@ from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db import models
 from django.db.models import Count, Q
@@ -65,6 +66,8 @@ DEPARTMENT_LOG_FIELDS = {
     'query': ['queryRepDate', 'createdAt', 'raiseDate'],
     'uploading': ['uploadDate', 'createdAt', 'doa'],
 }
+TASK_MANAGER_ROLES = {'superadmin', 'office_admin', 'admin'}
+TASK_ASSIGNABLE_ROLES = {'receptionist', 'billing', 'hod', 'opd', 'intimation', 'query', 'uploading'}
 
 def normalize_task_status(raw_status, due_date=None):
     status_map = {
@@ -80,7 +83,7 @@ def normalize_task_status(raw_status, due_date=None):
     return safe_status
 
 def serialize_task_for_hod(task):
-    patient = task.patients.first()
+    patient = task.patient
     status_value = task.status
     if status_value != 'Completed' and task.due_date and task.due_date < timezone.now():
         status_value = 'Overdue'
@@ -121,6 +124,44 @@ def serialize_task_for_hod(task):
         'notes': task.description or '',
         'department': task.department,
     }
+
+def get_task_queryset_for_user(user):
+    queryset = Task.objects.select_related('assigned_to', 'assigned_by', 'patient').order_by('-created_at')
+    if user.role in ['superadmin', 'office_admin']:
+        return queryset
+    if user.role == 'admin':
+        return queryset.filter(
+            models.Q(assigned_to__branch=user.branch) |
+            models.Q(assigned_by=user)
+        )
+    if user.role == 'hod':
+        return queryset.filter(models.Q(assigned_to=user) | models.Q(assigned_by=user))
+    return queryset.filter(assigned_to=user)
+
+def validate_generic_task_assignment(actor, assigned_to, patient=None):
+    if actor.role not in TASK_MANAGER_ROLES:
+        raise PermissionDenied("You are not allowed to manage tasks from this dashboard.")
+
+    if actor.role == 'superadmin':
+        allowed_roles = TASK_ASSIGNABLE_ROLES | {'admin', 'office_admin'}
+    else:
+        allowed_roles = TASK_ASSIGNABLE_ROLES
+
+    if assigned_to.role not in allowed_roles:
+        raise PermissionDenied(
+            f"{actor.get_role_display()} cannot assign tasks to {assigned_to.get_role_display()} accounts."
+        )
+
+    if actor.role == 'admin' and assigned_to.branch != actor.branch:
+        raise PermissionDenied("Branch Admin can assign tasks only inside their own branch.")
+
+    if (
+        patient and
+        actor.role not in {'office_admin', 'superadmin'} and
+        assigned_to.branch in ['LNM', 'RYM'] and
+        patient.branch_location != assigned_to.branch
+    ):
+        raise ValidationError({'patient': 'Selected patient must belong to the same branch as the assigned employee.'})
 
 def get_department_role(department):
     return DEPARTMENT_ROLE_MAP.get(str(department or '').strip(), '')
@@ -641,18 +682,21 @@ class PrintDischargeSummaryView(APIView):
         return Response({"error": "PDF Generation Failed"}, status=400)
     
 class TaskReportAPIView(APIView):
-    # Only Office Admin & HOD can view this report
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
-        # Find all staff under them
+        if request.user.role not in ['superadmin', 'office_admin', 'admin', 'hod']:
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
         staff = CustomUser.objects.filter(role__in=['billing', 'opd', 'intimation', 'query', 'uploading', 'hod'])
+        if request.user.role == 'admin':
+            staff = staff.filter(branch=request.user.branch)
         
         report_data = []
         for employee in staff:
-            # Count the tasks dynamically
             total_tasks = employee.tasks_received.count()
             completed_tasks = employee.tasks_received.filter(status='Completed').count()
             
-            # Fetch the patients assigned to this employee
             assigned_patients = Patient.objects.filter(assigned_tasks__assigned_to=employee).distinct()
             patient_list = [{"uhid": p.uhid, "name": p.patientName} for p in assigned_patients]
 
@@ -670,25 +714,29 @@ class TaskReportAPIView(APIView):
     
 class TaskListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = TaskSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        user = self.request.user
-        # Office Admin sees all tasks
-        if user.role in ['superadmin', 'office_admin']:
-            return Task.objects.all()
-        # HOD sees tasks they created OR tasks assigned to them
-        elif user.role == 'hod':
-            return Task.objects.filter(models.Q(assigned_to=user) | models.Q(assigned_by=user))
-        # Staff only see tasks assigned to them
-        return Task.objects.filter(assigned_to=user)
+        return get_task_queryset_for_user(self.request.user)
 
     def perform_create(self, serializer):
-        # When an Admin/HOD creates a task, automatically set them as the "assigned_by" person
+        assigned_to = serializer.validated_data['assigned_to']
+        patient = serializer.validated_data.get('patient')
+        validate_generic_task_assignment(self.request.user, assigned_to, patient=patient)
         serializer.save(assigned_by=self.request.user)
 
 class TaskDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = TaskSerializer
-    queryset = Task.objects.all()
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return get_task_queryset_for_user(self.request.user)
+
+    def perform_update(self, serializer):
+        assigned_to = serializer.validated_data.get('assigned_to', serializer.instance.assigned_to)
+        patient = serializer.validated_data.get('patient', serializer.instance.patient)
+        validate_generic_task_assignment(self.request.user, assigned_to, patient=patient)
+        serializer.save()
 
 class LabReportListCreateView(generics.ListCreateAPIView):
     serializer_class = LabReportSerializer
@@ -760,10 +808,14 @@ class HODEmployeeListAPIView(APIView):
 
         department = request.query_params.get('department')
         role_slug = get_department_role(department)
+        if not role_slug:
+            return Response({'error': 'Invalid department.'}, status=status.HTTP_400_BAD_REQUEST)
         queryset = CustomUser.objects.filter(role=role_slug)
 
         if getattr(request.user, 'branch', None) in ['LNM', 'RYM']:
             queryset = queryset.filter(branch=request.user.branch)
+
+        queryset = (queryset | CustomUser.objects.filter(pk=request.user.pk)).distinct()
 
         employees = []
         for employee in queryset.order_by('first_name', 'username'):
@@ -771,6 +823,7 @@ class HODEmployeeListAPIView(APIView):
             employee_name = employee.get_full_name().strip() or employee.username
             employees.append({
                 'id': employee.id,
+                'employeeCode': employee.emp_id or employee.username,
                 'name': employee_name,
                 'email': employee.email,
                 'role': employee.role,
@@ -787,11 +840,16 @@ class HODTaskListCreateAPIView(APIView):
             return denied
 
         department = request.query_params.get('department')
+        role_slug = get_department_role(department)
+        if not role_slug:
+            return Response({'error': 'Invalid department.'}, status=status.HTTP_400_BAD_REQUEST)
         employee_id = request.query_params.get('employeeId')
         date_filter = request.query_params.get('date')
         status_filter = request.query_params.get('status')
 
-        tasks = Task.objects.select_related('assigned_to').prefetch_related('patients').filter(department=department)
+        tasks = Task.objects.select_related('assigned_to', 'patient').filter(
+            models.Q(department=department) | models.Q(assigned_to=request.user)
+        )
 
         if getattr(request.user, 'branch', None) in ['LNM', 'RYM']:
             tasks = tasks.filter(
@@ -817,11 +875,27 @@ class HODTaskListCreateAPIView(APIView):
 
         employee_id = request.data.get('employeeId')
         department = request.data.get('department')
+        role_slug = get_department_role(department)
+        if not role_slug:
+            return Response({'error': 'Invalid department.'}, status=status.HTTP_400_BAD_REQUEST)
         assigned_to = get_object_or_404(CustomUser, pk=employee_id)
+        if assigned_to.pk != request.user.pk and assigned_to.role != role_slug:
+            return Response({'error': 'Selected employee does not belong to this department.'}, status=status.HTTP_400_BAD_REQUEST)
+        if getattr(request.user, 'branch', None) in ['LNM', 'RYM'] and assigned_to.branch != request.user.branch:
+            return Response({'error': 'You can assign tasks only inside your own branch.'}, status=status.HTTP_403_FORBIDDEN)
         due_date_raw = request.data.get('dueDate')
         due_date = None
         if due_date_raw:
             due_date = timezone.make_aware(datetime.datetime.fromisoformat(f"{due_date_raw}T23:59:00"))
+
+        patient = None
+        patient_uhid = request.data.get('patientId')
+        if patient_uhid:
+            patient = Patient.objects.filter(uhid=patient_uhid).first()
+            if not patient:
+                return Response({'error': 'Selected patient was not found.'}, status=status.HTTP_400_BAD_REQUEST)
+            if assigned_to.branch in ['LNM', 'RYM'] and patient.branch_location != assigned_to.branch:
+                return Response({'error': 'Selected patient belongs to a different branch.'}, status=status.HTTP_400_BAD_REQUEST)
 
         priority_map = {'low': 'Low', 'medium': 'Medium', 'high': 'High'}
         task = Task.objects.create(
@@ -833,13 +907,8 @@ class HODTaskListCreateAPIView(APIView):
             priority=priority_map.get(str(request.data.get('priority')).lower(), 'Medium'),
             status=normalize_task_status(request.data.get('status') or 'pending', due_date),
             due_date=due_date,
+            patient=patient,
         )
-
-        patient_uhid = request.data.get('patientId')
-        if patient_uhid:
-            patient = Patient.objects.filter(uhid=patient_uhid).first()
-            if patient:
-                task.patients.add(patient)
 
         return Response({'task': serialize_task_for_hod(task)}, status=status.HTTP_201_CREATED)
 
@@ -868,10 +937,13 @@ class HODAnalyticsAPIView(APIView):
             return denied
 
         department = request.query_params.get('department')
+        role_slug = get_department_role(department)
+        if not role_slug:
+            return Response({'error': 'Invalid department.'}, status=status.HTTP_400_BAD_REQUEST)
         employee_id = request.query_params.get('employeeId')
         date_filter = request.query_params.get('date')
 
-        tasks = Task.objects.select_related('assigned_to').filter(department=department)
+        tasks = Task.objects.select_related('assigned_to', 'patient').filter(department=department)
         if getattr(request.user, 'branch', None) in ['LNM', 'RYM']:
             tasks = tasks.filter(assigned_to__branch=request.user.branch)
         if employee_id:
@@ -893,7 +965,10 @@ class HODAnalyticsAPIView(APIView):
         ]
 
         employee_stats = []
-        for employee in CustomUser.objects.filter(role=get_department_role(department)):
+        employee_queryset = CustomUser.objects.filter(role=role_slug)
+        if getattr(request.user, 'branch', None) in ['LNM', 'RYM']:
+            employee_queryset = employee_queryset.filter(branch=request.user.branch)
+        for employee in employee_queryset:
             employee_tasks = [task for task in task_rows if task['employeeId'] == employee.id]
             if not employee_tasks and employee_id:
                 continue
@@ -965,10 +1040,15 @@ class HODReportDownloadAPIView(APIView):
             return denied
 
         department = request.query_params.get('department')
+        role_slug = get_department_role(department)
+        if not role_slug:
+            return Response({'error': 'Invalid department.'}, status=status.HTTP_400_BAD_REQUEST)
         employee_id = request.query_params.get('employeeId')
         date_filter = request.query_params.get('date')
 
-        tasks = Task.objects.select_related('assigned_to').prefetch_related('patients').filter(department=department)
+        tasks = Task.objects.select_related('assigned_to', 'patient').filter(department=department)
+        if getattr(request.user, 'branch', None) in ['LNM', 'RYM']:
+            tasks = tasks.filter(assigned_to__branch=request.user.branch)
         if employee_id:
             tasks = tasks.filter(assigned_to_id=employee_id)
         if date_filter:
@@ -1137,25 +1217,34 @@ class TaskEligibleEmployeesAPIView(APIView):
 
     def get(self, request):
         user = request.user
-        
-        # 👇 FIXED: Using exact database role keys (lowercase)
-        if user.role == 'office_admin':
-            employees = CustomUser.objects.filter(role__in=['hod', 'billing'])
+        department = request.query_params.get('department')
+
+        if user.role == 'superadmin':
+            employees = CustomUser.objects.filter(role__in=TASK_ASSIGNABLE_ROLES | {'admin', 'office_admin'})
+        elif user.role == 'office_admin':
+            employees = CustomUser.objects.filter(role__in=TASK_ASSIGNABLE_ROLES)
+        elif user.role == 'admin':
+            employees = CustomUser.objects.filter(role__in=TASK_ASSIGNABLE_ROLES, branch=user.branch)
         elif user.role == 'hod':
-            employees = CustomUser.objects.filter(role='billing')
-        elif user.role == 'superadmin':
-            employees = CustomUser.objects.all()
+            role_slug = get_department_role(department)
+            if not role_slug:
+                return Response({"error": "Invalid department."}, status=status.HTTP_400_BAD_REQUEST)
+            employees = CustomUser.objects.filter(role=role_slug)
+            if getattr(user, 'branch', None) in ['LNM', 'RYM']:
+                employees = employees.filter(branch=user.branch)
         else:
             employees = CustomUser.objects.none()
-            
-        # 👇 FIXED: Changed emp.name to emp.username, changed emp.role to emp.get_role_display(), removed emp.department
-        data = [{"id": emp.id, "name": emp.username, "role": emp.get_role_display()} for emp in employees]
+
+        data = [{"id": emp.id, "name": emp.get_full_name().strip() or emp.username, "role": emp.get_role_display()} for emp in employees]
         return Response(data)
 
 class BulkTaskAssignAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        if request.user.role not in TASK_MANAGER_ROLES:
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
         serializer = BulkTaskAssignSerializer(data=request.data)
         if serializer.is_valid():
             assign_to_id = serializer.validated_data['assign_to']
@@ -1168,10 +1257,18 @@ class BulkTaskAssignAPIView(APIView):
             except CustomUser.DoesNotExist:
                 return Response({"error": "Assigned user not found."}, status=status.HTTP_404_NOT_FOUND)
 
+            try:
+                validate_generic_task_assignment(request.user, assigned_to_user)
+            except PermissionDenied as exc:
+                return Response({"error": str(exc.detail)}, status=status.HTTP_403_FORBIDDEN)
+            except ValidationError as exc:
+                return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+
             tasks_to_create = []
             for pid in patient_ids:
                 try:
                     patient = Patient.objects.get(id=pid)
+                    validate_generic_task_assignment(request.user, assigned_to_user, patient=patient)
                     tasks_to_create.append(
                         Task(
                             title=title,
@@ -1182,6 +1279,8 @@ class BulkTaskAssignAPIView(APIView):
                             status='Pending'
                         )
                     )
+                except ValidationError as exc:
+                    return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
                 except Patient.DoesNotExist:
                     continue
 

@@ -2,18 +2,94 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import CustomTokenObtainPairSerializer
 from rest_framework import generics
 from .models import CustomUser
-from .serializers import UserManagementSerializer
+from .serializers import UserManagementSerializer, SelfProfileSerializer
 from .permissions import IsBranchAdminOrSuperAdmin
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import AdminPasswordResetSerializer, VerifyOTPandResetSerializer
+from .serializers import AdminPasswordResetSerializer
 import random
 from django.core.mail import send_mail
 from django.conf import settings
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import PasswordResetOTP
-from .serializers import RequestOTPSerializer
+from rest_framework.exceptions import PermissionDenied, ValidationError
+
+STAFF_ROLES = {
+    'receptionist',
+    'billing',
+    'hod',
+    'opd',
+    'intimation',
+    'query',
+    'uploading',
+}
+SUPERADMIN_MANAGED_ROLES = STAFF_ROLES | {'admin', 'office_admin'}
+BRANCH_CODES = {'LNM', 'RYM'}
+ALL_BRANCH_CODE = 'ALL'
+
+
+def get_managed_user_queryset(user, branch_code=None):
+    if user.role == 'superadmin':
+        return CustomUser.objects.all().order_by('id')
+    if user.role == 'office_admin':
+        return CustomUser.objects.filter(branch=ALL_BRANCH_CODE).exclude(role__in={'superadmin', 'office_admin'}).order_by('id')
+    if user.role == 'admin':
+        return CustomUser.objects.filter(branch=user.branch).order_by('id')
+    return CustomUser.objects.none()
+
+
+def get_allowed_target_roles(user):
+    if user.role == 'superadmin':
+        return SUPERADMIN_MANAGED_ROLES
+    if user.role in {'office_admin', 'admin'}:
+        return STAFF_ROLES
+    return set()
+
+
+def enforce_user_hierarchy(actor, payload, instance=None):
+    data = payload.copy()
+    target_role = str(data.get('role') or getattr(instance, 'role', 'receptionist')).strip()
+
+    if target_role == 'superadmin':
+        raise PermissionDenied("Super Admin accounts must be created through the seed file.")
+
+    allowed_roles = get_allowed_target_roles(actor)
+    if target_role not in allowed_roles:
+        raise PermissionDenied(
+            f"{actor.get_role_display()} cannot create or manage '{target_role}' accounts."
+        )
+
+    if instance and instance.role == 'superadmin':
+        raise PermissionDenied("The seeded Super Admin account cannot be changed here.")
+
+    if instance and actor.pk == instance.pk:
+        if str(data.get('role') or instance.role) != instance.role:
+            raise PermissionDenied("You cannot change your own role.")
+        if data.get('is_active') is False:
+            raise PermissionDenied("You cannot deactivate your own account.")
+
+    if target_role == 'office_admin':
+        data['branch'] = ALL_BRANCH_CODE
+        return data
+
+    if actor.role == 'office_admin':
+        data['branch'] = ALL_BRANCH_CODE
+    elif actor.role == 'admin':
+        data['branch'] = actor.branch
+    else:
+        branch = str(data.get('branch') or getattr(instance, 'branch', '') or '').strip().upper()
+        if branch not in BRANCH_CODES | {ALL_BRANCH_CODE}:
+            raise ValidationError({'branch': 'Branch must be LNM, RYM, or ALL for this role.'})
+        data['branch'] = branch
+
+    if target_role == 'admin' and data['branch'] not in BRANCH_CODES:
+        raise ValidationError({'branch': 'Branch Admin must belong to a single branch.'})
+
+    if target_role in STAFF_ROLES and data['branch'] not in BRANCH_CODES | {ALL_BRANCH_CODE}:
+        raise ValidationError({'branch': 'Staff accounts must belong to LNM, RYM, or ALL.'})
+
+    return data
 
 class CustomLoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
@@ -23,68 +99,56 @@ class UserListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsBranchAdminOrSuperAdmin]
 
     def get_queryset(self):
-        user = self.request.user
-        
-        # 1. Super Admin sees absolutely everyone
-        if user.role == 'superadmin':
-            return CustomUser.objects.all()
-            
-        # 2. 🌟 THE FIX: Office Admin ONLY sees the departments they create/manage
-        elif user.role == 'office_admin':
-            managed_roles = ['hod', 'billing', 'opd', 'intimation', 'query', 'uploading']
-            return CustomUser.objects.filter(role__in=managed_roles)
-            
-        # 3. Branch Admin only sees their own branch's staff
-        elif user.role == 'admin':
-            return CustomUser.objects.filter(branch=user.branch)
-            
-        return CustomUser.objects.none()
+        requested_branch = str(self.request.query_params.get('branch') or '').strip().upper()
+        return get_managed_user_queryset(self.request.user, branch_code=requested_branch)
 
-    def perform_create(self, serializer):
-        user = self.request.user
-        if user.role == 'admin':
-            serializer.save(branch=user.branch)
-        else:
-            serializer.save()
+    def create(self, request, *args, **kwargs):
+        sanitized_data = enforce_user_hierarchy(request.user, request.data)
+        serializer = self.get_serializer(data=sanitized_data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = UserManagementSerializer
     permission_classes = [IsBranchAdminOrSuperAdmin]
 
     def get_queryset(self):
-        user = self.request.user
-        
-        # 1. Super Admin sees absolutely everyone
-        if user.role == 'superadmin':
-            return CustomUser.objects.all()
-            
-        # 2. 🌟 THE FIX: Apply the exact same security filter here
-        elif user.role == 'office_admin':
-            managed_roles = ['hod', 'billing', 'opd', 'intimation', 'query', 'uploading']
-            return CustomUser.objects.filter(role__in=managed_roles)
-            
-        # 3. Branch Admin only sees their own branch's staff
-        elif user.role == 'admin':
-            return CustomUser.objects.filter(branch=user.branch)
-            
-        return CustomUser.objects.none()
+        requested_branch = str(self.request.query_params.get('branch') or '').strip().upper()
+        return get_managed_user_queryset(self.request.user, branch_code=requested_branch)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        sanitized_data = enforce_user_hierarchy(request.user, request.data, instance=instance)
+        serializer = self.get_serializer(instance, data=sanitized_data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.role == 'superadmin':
+            raise PermissionDenied("The seeded Super Admin account cannot be deleted.")
+        if instance.pk == request.user.pk:
+            raise PermissionDenied("You cannot delete your own account.")
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
     
 class AdminResetPasswordView(generics.UpdateAPIView):
-    queryset = CustomUser.objects.all()
     serializer_class = AdminPasswordResetSerializer
     permission_classes = [IsBranchAdminOrSuperAdmin]
 
+    def get_queryset(self):
+        requested_branch = str(self.request.query_params.get('branch') or '').strip().upper()
+        return get_managed_user_queryset(self.request.user, branch_code=requested_branch).exclude(role='superadmin')
+
     def update(self, request, *args, **kwargs):
         user_to_reset = self.get_object()
-        
-        # Security: Branch Admin can only reset passwords for their OWN branch
-        if request.user.role == 'admin' and user_to_reset.branch != request.user.branch:
-            return Response({"error": "You cannot reset passwords for other branches."}, 
-                            status=status.HTTP_403_FORBIDDEN)
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
 
         user_to_reset.set_password(serializer.validated_data['new_password'])
         user_to_reset.save()
@@ -179,3 +243,11 @@ class VerifyPasswordResetOTPView(APIView):
             {"message": "Password successfully reset. You can now log in with your new password."}, 
             status=status.HTTP_200_OK
         )
+
+
+class SelfProfileView(generics.RetrieveUpdateAPIView):
+    serializer_class = SelfProfileSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user

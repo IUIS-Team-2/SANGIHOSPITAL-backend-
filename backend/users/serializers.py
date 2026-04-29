@@ -4,6 +4,33 @@ import re
 from rest_framework import serializers
 from .models import CustomUser
 
+
+GLOBAL_ACCESS_ROLES = {'superadmin', 'office_admin'}
+EMPLOYEE_ID_PREFIXES = {
+    'LNM': 'LAK',
+    'RYM': 'RAY',
+    'ALL': 'OFF',
+}
+
+
+def get_employee_id_prefix(branch):
+    return EMPLOYEE_ID_PREFIXES.get(str(branch or '').strip().upper(), 'EMP')
+
+
+def generate_employee_id(branch):
+    prefix = get_employee_id_prefix(branch)
+    highest_suffix = 0
+    for emp_id in CustomUser.objects.filter(emp_id__startswith=prefix).values_list('emp_id', flat=True):
+        suffix = str(emp_id)[len(prefix):]
+        if suffix.isdigit():
+            highest_suffix = max(highest_suffix, int(suffix))
+    return f"{prefix}{highest_suffix + 1:04d}"
+
+
+def get_access_scope(user):
+    return 'all_hospitals' if user.role in GLOBAL_ACCESS_ROLES or user.branch == 'ALL' else 'single_branch'
+
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
@@ -11,12 +38,14 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # Add custom claims to the token itself if needed later
         token['role'] = user.role
         token['branch'] = user.branch
+        token['access_scope'] = get_access_scope(user)
         return token
 
     def validate(self, attrs):
         data = super().validate(attrs)
         data['role'] = self.user.role
         data['branch'] = self.user.branch
+        data['access_scope'] = get_access_scope(self.user)
         data['username'] = self.user.username
         data['name'] = f"{self.user.first_name} {self.user.last_name}".strip() or self.user.username
         return data
@@ -24,14 +53,21 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 class UserManagementSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False, style={'input_type': 'password'})
     confirm_password = serializers.CharField(write_only=True, required=False, style={'input_type': 'password'})
+    date_joined = serializers.DateTimeField(read_only=True)
+    last_login = serializers.DateTimeField(read_only=True)
+    access_scope = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomUser
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 
             'role', 'branch', 'emp_id', 'phone_number', 
-            'password', 'confirm_password', 'is_active'
+            'password', 'confirm_password', 'is_active', 'access_scope',
+            'date_joined', 'last_login',
         ]
+
+    def get_access_scope(self, obj):
+        return get_access_scope(obj)
 
     def validate_password(self, value):
         if len(value) < 8:
@@ -45,6 +81,9 @@ class UserManagementSerializer(serializers.ModelSerializer):
     def validate(self, data):
         password = data.get('password')
         confirm_password = data.get('confirm_password')
+        branch = str(data.get('branch') or getattr(self.instance, 'branch', '') or '').strip().upper()
+        emp_id = str(data.get('emp_id') or getattr(self.instance, 'emp_id', '') or '').strip().upper()
+        expected_prefix = get_employee_id_prefix(branch) if branch else ''
 
         if self.instance is None and not password:
             raise serializers.ValidationError({"password": "Password is required."})
@@ -52,6 +91,18 @@ class UserManagementSerializer(serializers.ModelSerializer):
         if password or confirm_password:
             if password != confirm_password:
                 raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+
+        if self.instance is None:
+            if emp_id and expected_prefix and not emp_id.startswith(expected_prefix):
+                raise serializers.ValidationError({"emp_id": f"Employee ID must start with {expected_prefix}."})
+            if not emp_id and branch:
+                data['emp_id'] = generate_employee_id(branch)
+            elif emp_id:
+                data['emp_id'] = emp_id
+        elif emp_id:
+            if expected_prefix and not emp_id.startswith(expected_prefix):
+                raise serializers.ValidationError({"emp_id": f"Employee ID must start with {expected_prefix}."})
+            data['emp_id'] = emp_id
         return data
 
     def create(self, validated_data):
@@ -106,3 +157,13 @@ class VerifyOTPandResetSerializer(serializers.Serializer):
         if data.get('new_password') != data.get('confirm_new_password'):
             raise serializers.ValidationError({"confirm_new_password": "Passwords do not match."})
         return data
+
+
+class SelfProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = [
+            'id', 'username', 'first_name', 'last_name', 'email',
+            'phone_number', 'emp_id', 'role', 'branch',
+        ]
+        read_only_fields = ['id', 'username', 'role', 'branch']

@@ -1,37 +1,20 @@
-# 🏥 Sangi Hospital Management System (HMS)
+# Sangi Hospital Backend
 
-A robust, Full-Stack Hospital Management System designed to handle the complete In-Patient Department (IPD) lifecycle. This platform seamlessly connects front-desk registration, medical records, service charting, and a secure billing approval workflow across multiple hospital branches.
+Updated on: `2026-04-29`
 
-## ✨ Key Features
+This backend is the active API for the HMS portal. Use it with `HMS-Frontend-new/frontend`.
 
-* **Smart Patient Lifecycle Management:** Step-by-step UI that guides staff through Registration -> Medical History -> Discharge -> Services -> Billing Summary.
-* **Auto-Session & Multi-Session Support:** Automated creation of Admission sessions, Medical History, and Billing placeholders upon patient registration using atomic database transactions. Returning patients can generate new admission sessions under their existing UHID, keeping medical histories cleanly separated by visit.
-* **Secure Print & Billing Approvals:** Branch staff can generate draft bills, but printing official invoices requires sending a secure digital request to a Super Admin for approval. The backend enforces this via status protections.
-* **Dynamic Master Tariff System:** A dynamic `ServiceMaster` database automatically serves up-to-date pricing and codes for 50+ hospital services (ICU, Radiology, Room Charges, etc.). Prices are loaded directly from a central Excel sheet into PostgreSQL.
-* **Duplicate Protection:** Strict backend validation prevents the registration of duplicate patients by cross-referencing Phone Numbers and National IDs.
-* **Multi-Branch Support:** Built-in location tagging (e.g., Laxmi Nagar vs. Raya) to filter data and calculate branch-specific revenues on the Super Admin Dashboard.
+## Stack
 
-## 🛠️ Tech Stack
-* **Frontend:** React.js, Context API, React-Toastify
-* **Backend:** Django 5.x, Django REST Framework (DRF)
-* **Database:** PostgreSQL (Containerized via Docker)
-* **Data Processing:** Python, `openpyxl` (for Excel data ingestion)
-* **Middleware:** `django-cors-headers` (Configured for separate React frontend)
+- Django + Django REST Framework
+- PostgreSQL
+- JWT auth via `rest_framework_simplejwt`
 
----
+## Local setup
 
-## ⚙️ Local Setup & Installation
+### 1. Start PostgreSQL
 
-Follow these steps to run the complete Full-Stack application locally on your machine.
-
-### 1. Prerequisites
-* Python 3.10+
-* Node.js & npm
-* Docker Desktop (for the PostgreSQL database)
-* Git
-
-### 2. Database Setup (Docker)
-We use PostgreSQL on port `5433`. The backend reads these values from `.env`:
+The backend reads DB config from `.env` and is currently set to:
 
 ```env
 DB_NAME=sangi_hospital
@@ -41,164 +24,172 @@ DB_HOST=127.0.0.1
 DB_PORT=5433
 ```
 
-If you do not already have the container, create it:
-
-```bash
-docker run --name postgres-sangi -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=admin123 -e POSTGRES_DB=sangi_hospital -p 5433:5432 -d postgres
-```
-
-If the container already exists and is only stopped, start it instead:
+If you already have the Docker container:
 
 ```bash
 docker start postgres-sangi
+docker exec -it postgres-sangi pg_isready -U postgres -d sangi_hospital
 ```
 
-You can verify PostgreSQL is running with:
+If you need to create it:
 
 ```bash
-docker ps
-docker exec -it postgres-sangi psql -U postgres -d sangi_hospital -c '\l'
+docker run --name postgres-sangi \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=admin123 \
+  -e POSTGRES_DB=sangi_hospital \
+  -p 5433:5432 \
+  -d postgres
 ```
 
-### 3. Backend Setup
+### 2. Install backend dependencies
 
 ```bash
-# Navigate to the backend directory
-cd backend
-
-# Create and activate virtual environment
+cd /Users/ritikkumar/Desktop/IUI/HMS-Portal/SANGIHOSPITAL-backend-/backend
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install requirements
+source venv/bin/activate
 pip install -r requirements.txt
-
-# Apply migrations
-python manage.py migrate
-
-# Optional: create admin user
-python manage.py createsuperuser
-
-# Import Master Data (Prices & Codes) from Excel
-python import_data.py
-
-# Start the Django server
-python manage.py runserver
 ```
 
-🔒 User Roles & Workflows
-Super Admin: Can view all branches, see live revenue/occupancy dashboards, and explicitly APPROVE or REJECT invoice print requests.
+### 3. Apply schema
 
-Branch Admin/Staff: Can register patients, update medical/discharge records, add clinical services, and request bill print approvals for their specific branch.
+```bash
+python manage.py migrate
+```
 
+### 4. Seed the main Super Admin
 
-🗂️ Project Structure
-backend/
-├── data/
-│   └── SANGIESIC.xlsx       # Master Excel file containing prices and codes
-├── patients/   
-│   ├── models.py            # Database schemas (Patient, Admission, ServiceMaster, etc.)
-│   ├── serializers.py       # JSON serialization and Validation logic
-│   ├── views.py             # ViewSets and Custom Action routes
-│   └── urls.py              # API endpoint routing
-├── sangi_hospital/
-│   ├── settings.py          # Django config (CORS, DB, Installed Apps)
-│   └── urls.py              # Main URL router
-├── import_data.py           # Custom script to ingest Excel into PostgreSQL
-├── manage.py
-└── requirements.txt
+Run the seed file:
 
+```bash
+python seed_superadmin.py
+```
 
-📡 Backend API Documentation
-Base URL: http://127.0.0.1:8000/api/
+Default seeded credentials:
 
-1. Patient & Admission Management
-These endpoints handle the core registration and patient lifecycle tracking.
+- username: `superadmin`
+- password: `Super@123`
+- email: `gmy.healthcare@gmail.com`
 
-Register New Patient
+Optional environment overrides:
 
-Endpoint: POST /patients/
+- `SEED_SUPERADMIN_USERNAME`
+- `SEED_SUPERADMIN_PASSWORD`
+- `SEED_SUPERADMIN_EMAIL`
+- `SEED_SUPERADMIN_FIRST_NAME`
+- `SEED_SUPERADMIN_LAST_NAME`
+- `SEED_SUPERADMIN_EMP_ID`
+- `SEED_SUPERADMIN_PHONE`
 
-Description: Creates a new patient record and automatically initializes their first admission (admNo: 1).
+### 5. Import master tariff data
 
-Key Fields: patientName, phone, gender, locId (maps to 'LNM' or 'RYM').
+```bash
+python import_data.py
+```
 
-List All Patients
+### 6. Run the API
 
-Endpoint: GET /patients/
+```bash
+python manage.py runserver 8000
+```
 
-Description: Retrieves all patient records, ordered by creation date.
+If port `8000` is already occupied, run:
 
-Create New Admission
+```bash
+python manage.py runserver 8001
+```
 
-Endpoint: POST /patients/{uhid}/new_admission/
+Base URL:
 
-Description: Generates a subsequent admission session (e.g., Admission #2) for a returning patient.
+```text
+http://127.0.0.1:8000/api
+```
 
-2. Clinical Documentation
-Endpoints for recording medical data and managing the discharge process.
+Frontend connection note:
 
-Update Medical History
+- `HMS-Frontend-new` now defaults to `http://127.0.0.1:8000`
+- if you move Django to another port, start the frontend with:
 
-Endpoint: PATCH /patients/{uhid}/update_medical/
+```bash
+export REACT_APP_API_ORIGIN=http://127.0.0.1:8001
+npm start
+```
 
-Description: Updates medical records (diagnosis, treating doctor, medications) for a specific admission.
+## Required admin creation flow
 
-Set Expected Discharge
+The intended hierarchy is now enforced in backend user management:
 
-Endpoint: PATCH /patients/{uhid}/set_expected_dod/
+1. `seed_superadmin.py` creates the main `superadmin`
+2. only `superadmin` can create:
+   - `admin` (Branch Admin)
+   - `office_admin` (Management / Back Office Admin for all hospitals)
+3. `admin` and `office_admin` can create staff users such as:
+   - `receptionist`
+   - `hod`
+   - `billing`
+   - `opd`
+   - `intimation`
+   - `query`
+   - `uploading`
 
-Description: Records the estimated discharge date, used for administrative planning dashboards.
+Branch rules:
 
-Finalize Discharge Summary
+- `superadmin` is a global all-hospitals role
+- `office_admin` is a global all-hospitals role and is forced to branch `ALL`
+- `admin` is forced to its own branch
+- staff users must belong to `LNM` or `RYM`
+- patient and branch records are still hardcoded to `LNM` / `RYM`, so onboarding a new hospital still needs a hospital/branch master refactor
 
-Endpoint: PATCH /patients/{uhid}/discharge/
+The seeded `superadmin` cannot be created, edited, or deleted through the normal user-management API.
 
-Description: Records final discharge details (actual DOD, condition, department).
+## Task manager flow
 
-3. Billing & Services Tariff
-Handles service entry and the financial summary of each admission.
+Two task flows are active:
 
-Fetch Service Master (Tariff)
+### Management / Office Admin task flow
 
-Endpoint: GET /service-master/
+- endpoints:
+  - `GET /api/tasks/`
+  - `POST /api/tasks/`
+  - `PATCH /api/tasks/{id}/`
+  - `DELETE /api/tasks/{id}/`
+- one task now points to exactly one patient through `Task.patient`
+- backend still accepts the legacy frontend alias payloads and maps them to the live `patient` field
+- branch validation is enforced for Branch Admin assignments
 
-Description: Provides the complete list of available services and their standard rates dynamically from the database.
+### HOD task flow
 
-Add/Update Service Charge
+- endpoints:
+  - `GET /api/hod/employees/`
+  - `GET /api/hod/tasks/`
+  - `POST /api/hod/tasks/`
+  - `PATCH /api/hod/tasks/{id}/`
+  - `GET /api/hod/analytics/`
+  - `GET/POST /api/hod/reviews/`
+  - `GET /api/hod/reports/download/`
+- old broken references to the removed `Task.patients` relation were fixed
+- HOD task assignment now validates department role and branch
 
-Endpoint: POST /patients/{uhid}/add_service/
+## Main business flows
 
-Description: Records a specific service charge. This is idempotent; updating the same service name for the same admission updates the existing record.
+- patient registration and search: `/api/patients/`
+- returning patient new admission: `POST /api/patients/{uhid}/new_admission/`
+- medical history: `PATCH /api/patients/{uhid}/update_medical/`
+- discharge: `PATCH /api/patients/{uhid}/discharge/`
+- service rows bulk save: `POST /api/patients/{uhid}/admissions/{adm_no}/services/bulk-save/`
+- lab reports bulk save: `POST /api/patients/{uhid}/admissions/{adm_no}/lab-reports/bulk-save/`
+- pharmacy bulk save: `POST /api/patients/{uhid}/admissions/{adm_no}/pharmacy-records/bulk-save/`
+- billing: `PATCH /api/patients/{uhid}/update_billing/`
+- print approval:
+  - `POST /api/patients/{uhid}/request_print/`
+  - `POST /api/patients/{uhid}/resolve_print/`
 
-Update Billing Summary
+## Verified state
 
-Endpoint: PATCH /patients/{uhid}/update_billing/
+- `python manage.py check` passed
+- `python seed_superadmin.py` ran successfully against the local database
 
-Description: Records discounts, total payments, and payment methods.
+## Known incomplete areas
 
-4. Administrative Approval Workflow
-A secure workflow for managing official invoice printing rights.
-
-Request Bill Print
-
-Endpoint: POST /patients/{uhid}/request_print/
-
-Description: Staff requests permission to print an official bill. Sets status to PENDING.
-
-View Pending Requests
-
-Endpoint: GET /patients/pending_prints/
-
-Description: Used by the Super Admin Dashboard to see all patients currently waiting for bill approval.
-
-Resolve Print Request
-
-Endpoint: POST /patients/{uhid}/resolve_print/
-
-Description: Admin action to APPROVE or REJECT a print request, enabling or disabling the green print feature on the frontend UI.
-
-🛠️ Technical Notes for Frontend Integration:
-ID Mapping: When registering patients, the system expects locId as laxmi or raya. The backend automatically converts these to LNM (Laxmi Nagar Mathura) and RYM (Raya Mathura).
-
-Data Integrity: The update_billing endpoint is protected. It explicitly ignores incoming updates to the printStatus field so staff saves cannot overwrite an existing APPROVED or PENDING admin decision.
+- `doctor` and `nursing` frontend pages are still not on the same backend-backed flow
+- employee HR fields such as separate designation/department schema are still simplified into role-driven user records
