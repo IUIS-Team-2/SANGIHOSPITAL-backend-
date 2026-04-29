@@ -8,28 +8,38 @@
             <div class="section-title">{{ sec.label }}</div>
             
             {% if sec.type == "vitals_grid" %}
-                <table class="vitals-table">
-                    <tr>
-                        <td width="33%">BP: {{ sec.value.bp|default:"--" }}</td>
-                        <td width="33%">PR: {{ sec.value.pulse|default:"--" }}</td>
-                        <td width="34%">SPO2: {{ sec.value.spo2|default:"--" }}</td>
-                    </tr>
-                    <tr>
-                        <td>CHEST: {{ sec.value.chest|default:"--" }}</td>
-                        <td colspan="2">TEMP: {{ sec.value.temp|default:"--" }}</td>
-                    </tr>
-                    <tr><td colspan="3">CVS: {{ sec.value.cvs|default:"--" }}</td></tr>
-                    <tr><td colspan="3">CNS: {{ sec.value.cns|default:"--" }}</td></tr>
-                    <tr><td colspan="3">ABD: {{ sec.value.abd|default:"--" }}</td></tr>
-                    {% if sec.value.pallor or sec.value.icterus %}
-                    <tr>
-                        <td colspan="3">
-                            {% if sec.value.pallor %}PALLOR: {{ sec.value.pallor }} &nbsp;&nbsp;&nbsp; {% endif %}
-                            {% if sec.value.icterus %}ICTERUS: {{ sec.value.icterus }}{% endif %}
-                        </td>
-                    </tr>
+                <div class="section-content" style="line-height: 1.5; font-weight: bold; text-transform: uppercase;">
+                    {% if sec.value.bp or sec.value.pulse or sec.value.spo2 %}
+                    <div>
+                        {% if sec.value.bp %}BP: {{ sec.value.bp }} &nbsp;&nbsp;&nbsp;{% endif %}
+                        {% if sec.value.pulse %}PR: {{ sec.value.pulse }} &nbsp;&nbsp;&nbsp;{% endif %}
+                        {% if sec.value.spo2 %}SPO2: {{ sec.value.spo2 }}{% endif %}
+                    </div>
                     {% endif %}
-                </table>
+                    
+                    {% if sec.value.chest or sec.value.temp %}
+                    <div>
+                        {% if sec.value.chest %}CHEST: {{ sec.value.chest }} &nbsp;&nbsp;&nbsp;{% endif %}
+                        {% if sec.value.temp %}TEMP: {{ sec.value.temp }}{% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    {% if sec.value.cvs %}<div>CVS: {{ sec.value.cvs }}</div>{% endif %}
+                    
+                    {% if sec.value.cns or sec.value.abd %}
+                    <div>
+                        {% if sec.value.cns %}CNS: {{ sec.value.cns }} &nbsp;&nbsp;&nbsp;{% endif %}
+                        {% if sec.value.abd %}ABD: {{ sec.value.abd }}{% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    {% if sec.value.pallor or sec.value.icterus %}
+                    <div>
+                        {% if sec.value.pallor %}PALLOR: {{ sec.value.pallor }} &nbsp;&nbsp;&nbsp;{% endif %}
+                        {% if sec.value.icterus %}ICTERUS: {{ sec.value.icterus }}{% endif %}
+                    </div>
+                    {% endif %}
+                </div>
             {% else %}
                 <div class="section-content">{{ sec.value }}</div>
             {% endif %}
@@ -37,13 +47,14 @@
     {% endfor %}
 
     <table class="footer-table">
-    <tr>
-        <td style="padding-top: 8px; font-size: 13px; text-transform: uppercase;">{{ consultant }}</td>
-        <td style="padding-top: 8px;">&nbsp;</td> </tr>
-    <tr>
-        <td style="font-size: 11px; color: #333;">CONSULTANT DOCTOR</td>
-        <td style="font-size: 11px; color: #333;">RESIDENT MEDICAL OFFICER</td>
-    </tr>
-</table>
+        <tr>
+            <td style="padding-top: 8px; font-size: 13px; text-transform: uppercase;">{{ consultant }}</td>
+            <td style="padding-top: 8px;">&nbsp;</td>
+        </tr>
+        <tr class="footer-row">
+            <td style="font-size: 11px; color: #333;">CONSULTANT DOCTOR</td>
+            <td style="font-size: 11px; color: #333;">RESIDENT MEDICAL OFFICER</td>
+        </tr>
+    </table>
 </body>
 </html>

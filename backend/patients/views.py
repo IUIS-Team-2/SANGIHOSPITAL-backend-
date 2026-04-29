@@ -655,7 +655,7 @@ class PrintDischargeSummaryView(APIView):
                     section["value"] = discharge.dischargeStatus.upper() if discharge.dischargeStatus else "--"
 
         context = {
-            "s": summary, "sections": sections,
+            "s": summary, "sections": sections, "uhid": patient.uhid,
             "ipd_no": admission.ipdNo, "patient_name": patient.patientName.upper(),
             "guardian_name": patient.guardianName.upper() if patient.guardianName else "--",
             "address": patient.address, "consultant": discharge.doctorName.upper() if discharge and discharge.doctorName else "--",
