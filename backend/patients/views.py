@@ -53,11 +53,13 @@ from .models import MedicineMaster, PharmacyRecord, ReportMaster
 from .serializers import MedicineMasterSerializer, PharmacyRecordSerializer, ReportMasterSerializer
 
 DEPARTMENT_ROLE_MAP = {
+    'HOD': 'hod',
     'Billing': 'billing',
     'Uploading': 'uploading',
     'Query': 'query',
     'OPD': 'opd',
     'Intimation': 'intimation',
+    'Receptionist': 'receptionist',
 }
 
 DEPARTMENT_LOG_FIELDS = {
@@ -138,7 +140,7 @@ def get_task_queryset_for_user(user):
         return queryset.filter(models.Q(assigned_to=user) | models.Q(assigned_by=user))
     return queryset.filter(assigned_to=user)
 
-def validate_generic_task_assignment(actor, assigned_to, patient=None):
+def validate_generic_task_assignment(actor, assigned_to, patient=None, department=None):
     if actor.role not in TASK_MANAGER_ROLES:
         raise PermissionDenied("You are not allowed to manage tasks from this dashboard.")
 
@@ -151,6 +153,15 @@ def validate_generic_task_assignment(actor, assigned_to, patient=None):
         raise PermissionDenied(
             f"{actor.get_role_display()} cannot assign tasks to {assigned_to.get_role_display()} accounts."
         )
+
+    expected_role = get_department_role(department)
+    if expected_role and assigned_to.role != expected_role:
+        raise ValidationError({
+            'assigned_to': f"Department '{department}' tasks must be assigned to a '{expected_role}' user."
+        })
+
+    if expected_role == 'billing' and patient is None:
+        raise ValidationError({'patient': 'Billing tasks must be linked to a patient.'})
 
     if actor.role == 'admin' and assigned_to.branch != actor.branch:
         raise PermissionDenied("Branch Admin can assign tasks only inside their own branch.")
@@ -722,7 +733,13 @@ class TaskListCreateAPIView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         assigned_to = serializer.validated_data['assigned_to']
         patient = serializer.validated_data.get('patient')
-        validate_generic_task_assignment(self.request.user, assigned_to, patient=patient)
+        department = serializer.validated_data.get('department')
+        validate_generic_task_assignment(
+            self.request.user,
+            assigned_to,
+            patient=patient,
+            department=department,
+        )
         serializer.save(assigned_by=self.request.user)
 
 class TaskDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
@@ -735,7 +752,13 @@ class TaskDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         assigned_to = serializer.validated_data.get('assigned_to', serializer.instance.assigned_to)
         patient = serializer.validated_data.get('patient', serializer.instance.patient)
-        validate_generic_task_assignment(self.request.user, assigned_to, patient=patient)
+        department = serializer.validated_data.get('department', serializer.instance.department)
+        validate_generic_task_assignment(
+            self.request.user,
+            assigned_to,
+            patient=patient,
+            department=department,
+        )
         serializer.save()
 
 class LabReportListCreateView(generics.ListCreateAPIView):
@@ -1258,7 +1281,7 @@ class BulkTaskAssignAPIView(APIView):
                 return Response({"error": "Assigned user not found."}, status=status.HTTP_404_NOT_FOUND)
 
             try:
-                validate_generic_task_assignment(request.user, assigned_to_user)
+                validate_generic_task_assignment(request.user, assigned_to_user, department=department)
             except PermissionDenied as exc:
                 return Response({"error": str(exc.detail)}, status=status.HTTP_403_FORBIDDEN)
             except ValidationError as exc:
@@ -1268,7 +1291,12 @@ class BulkTaskAssignAPIView(APIView):
             for pid in patient_ids:
                 try:
                     patient = Patient.objects.get(id=pid)
-                    validate_generic_task_assignment(request.user, assigned_to_user, patient=patient)
+                    validate_generic_task_assignment(
+                        request.user,
+                        assigned_to_user,
+                        patient=patient,
+                        department=department,
+                    )
                     tasks_to_create.append(
                         Task(
                             title=title,
