@@ -28,6 +28,45 @@ class CustomUser(AbstractUser):
     emp_id = models.CharField(max_length=50, unique=True, null=True, blank=True)
     phone_number = models.CharField(max_length=15, null=True, blank=True)
 
+    def save(self, *args, **kwargs):
+        # If the emp_id is blank, auto-generate it. Otherwise, use what the user typed.
+        if not self.emp_id:
+            role_prefixes = {
+                'office_admin': 'OFF',
+                'hod': 'HOD',
+                'billing': 'BIL',
+                'opd': 'OPD',
+                'intimation': 'INT',
+                'query': 'QRY',
+                'uploading': 'UPL',
+                'receptionist': 'REC',
+                'admin': 'ADM',
+                'superadmin': 'SUP'
+            }
+            prefix = role_prefixes.get(self.role, 'EMP')
+            
+            # Find all users with this prefix to determine the highest number
+            existing_users = CustomUser.objects.filter(emp_id__startswith=prefix)
+            max_num = 0
+            
+            for user in existing_users:
+                try:
+                    # Strip the prefix to get the number (e.g., '0012' from 'OFF0012')
+                    num_str = user.emp_id.replace(prefix, '')
+                    num = int(num_str)
+                    if num > max_num:
+                        max_num = num
+                except ValueError:
+                    continue
+                    
+            # Add 1 to the highest number found
+            new_number = max_num + 1
+            
+            # Pad with zeros to 4 digits
+            self.emp_id = f"{prefix}{str(new_number).zfill(4)}"
+            
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
     
