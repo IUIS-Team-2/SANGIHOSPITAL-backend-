@@ -159,6 +159,14 @@ def validate_generic_task_assignment(actor, assigned_to, patient=None, departmen
         raise PermissionDenied(
             f"{actor.get_role_display()} cannot assign tasks to {assigned_to.get_role_display()} accounts."
         )
+    
+    if (
+        patient and
+        actor.role not in {'office_admin', 'superadmin', 'hod'} and 
+        assigned_to.branch in ['LNM', 'RYM'] and
+        patient.branch_location != assigned_to.branch
+    ):
+        raise ValidationError({'patient': 'Selected patient must belong to the same branch as the assigned employee.'})
 
     expected_role = get_department_role(department)
     if expected_role and assigned_to.role != expected_role:
@@ -1304,12 +1312,6 @@ class BulkTaskAssignAPIView(APIView):
                 try:
                     patient = Patient.objects.get(id=pid)
                     
-                    # 🌟 THE FIX: HOD can only assign patients from their own branch
-                    if request.user.role == 'hod' and patient.branch_location != request.user.branch:
-                        return Response(
-                            {"error": f"Patient {patient.uhid} does not belong to your branch."},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
 
                     validate_generic_task_assignment(
                         request.user,
