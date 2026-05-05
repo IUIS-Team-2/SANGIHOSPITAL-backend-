@@ -2,8 +2,9 @@ import datetime
 import os 
 import csv
 import json
+from decimal import Decimal
 from urllib.parse import quote
-from decimal import Decimal, InvalidOperation
+from decimal import InvalidOperation
 from django.utils import timezone
 from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
@@ -17,6 +18,7 @@ from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Case, When, Value, IntegerField
 from users import permissions
 from .serializers import DoctorSerializer
@@ -53,6 +55,7 @@ from .report_templates import build_suggested_reports_for_admission
 import qrcode
 import base64
 import io
+import openpyxl
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.http import HttpResponse
@@ -1253,6 +1256,117 @@ class MedicineMasterViewSet(viewsets.ModelViewSet):
     queryset = MedicineMaster.objects.all().order_by('name')
     serializer_class = MedicineMasterSerializer
     permission_classes = [IsAuthenticated]
+
+
+def parse_medicine_master_workbook(uploaded_file):
+    def normalize_expiry_date(value):
+        if value in (None, ''):
+            return None
+
+        if isinstance(value, datetime.datetime):
+            return value.date()
+        if isinstance(value, datetime.date):
+            return value
+
+        text = str(value).strip()
+        if not text:
+            return None
+
+        for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%d-%m-%y"):
+            try:
+                return datetime.datetime.strptime(text, fmt).date()
+            except ValueError:
+                continue
+
+        for fmt in ("%m/%Y", "%m-%Y", "%m/%y", "%m-%y"):
+            try:
+                parsed = datetime.datetime.strptime(text, fmt)
+                return datetime.date(parsed.year, parsed.month, 1)
+            except ValueError:
+                continue
+
+        return None
+
+    workbook = openpyxl.load_workbook(uploaded_file, data_only=True)
+    worksheet = workbook[workbook.sheetnames[0]]
+
+    header_row_index = None
+    headers = []
+    for index, row in enumerate(worksheet.iter_rows(min_row=1, max_row=min(25, worksheet.max_row), values_only=True), start=1):
+        normalized = [str(cell).strip().lower() if cell is not None else '' for cell in row]
+        if 'description' in normalized and 'rate' in normalized and ('qty.' in normalized or 'qty' in normalized):
+            header_row_index = index
+            headers = [str(cell).strip() if cell is not None else '' for cell in row]
+            break
+
+    if not header_row_index:
+        raise ValidationError({'file': "Could not find medicine sheet headers. Expected columns like Description, Batch No., Exp., Rate, Qty."})
+
+    parsed_rows = []
+    for row in worksheet.iter_rows(min_row=header_row_index + 1, values_only=True):
+        row_map = {headers[idx]: row[idx] if idx < len(row) else None for idx in range(len(headers))}
+
+        description = str(row_map.get('Description') or '').strip()
+        if not description or description.lower() in {'none', 'nan'}:
+            continue
+
+        batch_no = str(row_map.get('Batch No.') or '').strip()
+        expiry_date = normalize_expiry_date(row_map.get('Exp.'))
+        rate_raw = row_map.get('Rate')
+        qty_raw = row_map.get('Qty.') if 'Qty.' in row_map else row_map.get('Qty')
+
+        try:
+            rate = Decimal(str(rate_raw or 0)).quantize(Decimal('0.01'))
+        except Exception:
+            rate = Decimal('0.00')
+
+        try:
+            quantity = int(float(qty_raw or 0))
+        except Exception:
+            quantity = 0
+
+        parsed_rows.append(
+            MedicineMaster(
+                name=description,
+                batch_no=batch_no or None,
+                expiry_date=expiry_date,
+                rate=rate,
+                quantity=max(quantity, 0),
+            )
+        )
+
+    if not parsed_rows:
+        raise ValidationError({'file': 'No medicine rows were found in the uploaded sheet.'})
+
+    return parsed_rows
+
+
+class MedicineMasterImportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        if getattr(request.user, 'role', '') not in {'superadmin', 'office_admin'}:
+            raise PermissionDenied("Only Super Admin and Office Admin can import medicine records.")
+
+        uploaded_file = request.FILES.get('file')
+        if not uploaded_file:
+            raise ValidationError({'file': 'Please upload an Excel file.'})
+
+        rows = parse_medicine_master_workbook(uploaded_file)
+
+        with transaction.atomic():
+            MedicineMaster.objects.all().delete()
+            MedicineMaster.objects.bulk_create(rows)
+
+        return Response(
+            {
+                'imported': len(rows),
+                'message': 'Medicine master updated successfully.',
+                'sample': MedicineMasterSerializer(MedicineMaster.objects.all().order_by('name')[:10], many=True).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 class PharmacyRecordViewSet(viewsets.ModelViewSet):
     serializer_class = PharmacyRecordSerializer

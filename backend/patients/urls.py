@@ -25,6 +25,7 @@ from .views import (
     PharmacyRecordBulkSaveAPIView,
     DoctorViewSet, 
     PrintBillView,
+    MedicineMasterImportAPIView,
 )
 
 router = DefaultRouter()
@@ -56,6 +57,7 @@ urlpatterns = [
     path('patients/<str:uhid>/admissions/<int:adm_no>/lab-reports/', LabReportListCreateView.as_view(), name='lab-reports'),
     path('patients/<str:uhid>/admissions/<int:adm_no>/lab-report-templates/', LabReportTemplateSuggestionsAPIView.as_view(), name='lab-report-templates'),
     path('patients/<str:uhid>/admissions/<str:adm_no>/lab-reports/bulk-save/', LabReportBulkSaveAPIView.as_view(), name='lab-reports-bulk-save'),
+    path('medicine-master/import-excel/', MedicineMasterImportAPIView.as_view(), name='medicine-master-import-excel'),
     path('patients/<str:uhid>/admissions/<str:adm_no>/pharmacy-records/', views.PharmacyRecordViewSet.as_view({'get': 'list', 'post': 'create'}), name='pharmacy-records-list'),
     path('patients/<str:uhid>/admissions/<str:adm_no>/pharmacy-records/bulk-save/', PharmacyRecordBulkSaveAPIView.as_view(), name='pharmacy-records-bulk-save'),
     path('patients/<str:uhid>/admissions/<str:adm_no>/pharmacy-records/<int:pk>/', views.PharmacyRecordViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='pharmacy-records-detail'),
