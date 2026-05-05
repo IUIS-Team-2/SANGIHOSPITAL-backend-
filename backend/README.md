@@ -51,6 +51,8 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+If you already had the `venv` from an older checkout, run `pip install -r requirements.txt` again after pulling changes so newly added packages such as `qrcode` are installed before `migrate` or `runserver`.
+
 ### 3. Apply schema
 
 ```bash
