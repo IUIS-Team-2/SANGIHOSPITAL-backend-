@@ -372,6 +372,7 @@ class PharmacyRecordSerializer(serializers.ModelSerializer):
 class TaskSerializer(serializers.ModelSerializer):
     patient_name = serializers.CharField(source='patient.patientName', read_only=True)
     patient_uhid = serializers.CharField(source='patient.uhid', read_only=True)
+    patient_detail = PatientSerializer(source='patient', read_only=True)
     patient_names = serializers.SerializerMethodField()
     patient_uhids = serializers.SerializerMethodField()
     assigned_to_name = serializers.SerializerMethodField()
