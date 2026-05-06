@@ -369,15 +369,12 @@ class PatientViewSet(viewsets.ModelViewSet):
         elif user.role in ['admin', 'receptionist']:
             return queryset.filter(branch_location=user.branch).order_by('-created_at')
             
-        # 3. HOD sees their tasks, tasks they assigned, OR ANY CASHLESS PATIENT
+        # 3. HOD should be able to work on all patients for their branch.
+        # If HOD is configured with branch=ALL, allow cross-branch visibility.
         elif user.role == 'hod':
-            from django.db import models 
-            return queryset.filter(
-                models.Q(assigned_tasks__assigned_to=user) | 
-                models.Q(assigned_tasks__assigned_by=user) |
-                models.Q(payMode__icontains='cashless') |
-                models.Q(admissions__bills__bill_type='CASHLESS')
-            ).distinct().order_by('-created_at')
+            if getattr(user, 'branch', None) in get_valid_branch_codes():
+                return queryset.filter(branch_location=user.branch).order_by('-created_at')
+            return queryset.order_by('-created_at')
 
         # 4. Staff only see patients explicitly assigned to them via Task Manager
         elif user.role in ['billing', 'opd', 'intimation', 'query', 'uploading', 'nursing', 'notes', 'medical_officer', 'quality_analyst']:
@@ -753,7 +750,26 @@ class DynamicDischargeSummaryView(APIView):
 class PrintDischargeSummaryView(APIView):
     def get(self, request, uhid, adm_no):
         admission = get_object_or_404(Admission, patient__uhid=uhid, admNo=adm_no)
-        summary = get_object_or_404(DischargeSummary, admission=admission)
+        summary = DischargeSummary.objects.filter(admission=admission).first()
+        if not summary:
+            discharge = getattr(admission, 'discharge', None)
+            raw_status = getattr(discharge, 'dischargeStatus', 'NORMAL')
+            status_str = str(raw_status).upper()
+            if "LAMA" in status_str:
+                fallback_type = "LAMA"
+            elif "DOPR" in status_str:
+                fallback_type = "DOPR"
+            elif "REFER" in status_str:
+                fallback_type = "REFER"
+            elif "DEATH" in status_str:
+                fallback_type = "DEATH"
+            else:
+                fallback_type = "NORMAL"
+            summary = DischargeSummary(
+                admission=admission,
+                summary_type=fallback_type,
+                content=copy.deepcopy(DISCHARGE_TEMPLATES.get(fallback_type, DISCHARGE_TEMPLATES["NORMAL"])),
+            )
         
         status_map = {"NORMAL": "pdf/normal.html", "RECOVERED": "pdf/normal.html", "LAMA": "pdf/lama.html", "REFER": "pdf/refer.html", "DOPR": "pdf/dopr.html", "DEATH": "pdf/death.html"}
         template_file = status_map.get(summary.summary_type, "pdf/normal.html")
