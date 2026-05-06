@@ -17,7 +17,7 @@ from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 from django.template.loader import render_to_string
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Case, When, Value, IntegerField
 from users import permissions
@@ -49,7 +49,7 @@ from .serializers import (
     TaskSerializer,
     LabReportSerializer,
     HODReviewSerializer,
-    DepartmentLogEntrySerializer, BulkTaskAssignSerializer
+    DepartmentLogEntrySerializer, BulkTaskAssignSerializer, HospitalSettingsSerializer
 )
 from .report_templates import build_suggested_reports_for_admission
 import qrcode
@@ -88,6 +88,30 @@ DEPARTMENT_LOG_FIELDS = {
     'query': ['queryRepDate', 'createdAt', 'raiseDate'],
     'uploading': ['uploadDate', 'createdAt', 'doa'],
 }
+
+
+def get_branch_settings_queryset():
+    return HospitalSettings.objects.all().order_by('branch_name', 'branch')
+
+
+def get_valid_branch_codes():
+    return set(get_branch_settings_queryset().values_list('branch', flat=True))
+
+
+def resolve_branch_code_from_loc(loc_id=None, explicit_branch=None):
+    if explicit_branch:
+        branch = str(explicit_branch).strip().upper()
+        if HospitalSettings.objects.filter(branch=branch).exists():
+            return branch
+
+    if loc_id:
+        slug = str(loc_id).strip().lower()
+        branch_obj = HospitalSettings.objects.filter(slug=slug).first()
+        if branch_obj:
+            return branch_obj.branch
+
+    default_branch = HospitalSettings.objects.order_by('id').first()
+    return default_branch.branch if default_branch else 'LNM'
 TASK_MANAGER_ROLES = {'superadmin', 'office_admin', 'admin', 'hod'}
 TASK_ASSIGNABLE_ROLES = {
     'receptionist', 'billing', 'hod', 'opd', 'intimation', 'query', 'uploading',
@@ -177,6 +201,7 @@ def get_task_queryset_for_user(user):
     return queryset.filter(assigned_to=user)
 
 def validate_generic_task_assignment(actor, assigned_to, patient=None, department=None):
+    valid_branch_codes = get_valid_branch_codes()
     if actor.role not in TASK_MANAGER_ROLES:
         raise PermissionDenied("You are not allowed to manage tasks from this dashboard.")
 
@@ -193,7 +218,7 @@ def validate_generic_task_assignment(actor, assigned_to, patient=None, departmen
     if (
         patient and
         actor.role not in {'office_admin', 'superadmin', 'hod'} and 
-        assigned_to.branch in ['LNM', 'RYM'] and
+        assigned_to.branch in valid_branch_codes and
         patient.branch_location != assigned_to.branch
     ):
         raise ValidationError({'patient': 'Selected patient must belong to the same branch as the assigned employee.'})
@@ -213,7 +238,7 @@ def validate_generic_task_assignment(actor, assigned_to, patient=None, departmen
     if (
         patient and
         actor.role not in {'office_admin', 'superadmin'} and
-        assigned_to.branch in ['LNM', 'RYM'] and
+        assigned_to.branch in valid_branch_codes and
         patient.branch_location != assigned_to.branch
     ):
         raise ValidationError({'patient': 'Selected patient must belong to the same branch as the assigned employee.'})
@@ -364,8 +389,8 @@ class PatientViewSet(viewsets.ModelViewSet):
         data = request.data.copy()
         admission_type = data.pop('admissionType', None) or request.data.get('admissionType') or 'IPD'
         
-        if 'locId' in data:
-            data['branch_location'] = 'RYM' if data['locId'] == 'raya' else 'LNM'
+        if 'locId' in data or 'branch_location' in data:
+            data['branch_location'] = resolve_branch_code_from_loc(data.get('locId'), data.get('branch_location'))
             
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
@@ -646,6 +671,37 @@ class ServiceMasterViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ServiceMasterSerializer
     pagination_class = None 
 
+
+class HospitalSettingsViewSet(viewsets.ModelViewSet):
+    queryset = get_branch_settings_queryset()
+    serializer_class = HospitalSettingsSerializer
+    pagination_class = None
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
+    def create(self, request, *args, **kwargs):
+        if getattr(request.user, 'role', '') != 'superadmin':
+            raise PermissionDenied("Only Super Admin can create hospital branches.")
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        if getattr(request.user, 'role', '') != 'superadmin':
+            raise PermissionDenied("Only Super Admin can update hospital branches.")
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if getattr(request.user, 'role', '') != 'superadmin':
+            raise PermissionDenied("Only Super Admin can delete hospital branches.")
+        instance = self.get_object()
+        if Patient.objects.filter(branch_location=instance.branch).exists():
+            raise ValidationError({'branch': 'This branch already has patient records and cannot be deleted.'})
+        if CustomUser.objects.filter(branch=instance.branch).exists():
+            raise ValidationError({'branch': 'This branch already has user accounts and cannot be deleted.'})
+        return super().destroy(request, *args, **kwargs)
+
 class DynamicDischargeSummaryView(APIView):
     def _clean_status(self, raw_status):
         status_str = str(raw_status).upper()
@@ -915,7 +971,7 @@ class HODEmployeeListAPIView(APIView):
             return Response({'error': 'Invalid department.'}, status=status.HTTP_400_BAD_REQUEST)
         queryset = CustomUser.objects.filter(role=role_slug)
 
-        if getattr(request.user, 'branch', None) in ['LNM', 'RYM']:
+        if getattr(request.user, 'branch', None) in get_valid_branch_codes():
             queryset = queryset.filter(branch=request.user.branch)
 
         queryset = (queryset | CustomUser.objects.filter(pk=request.user.pk)).distinct()
@@ -954,7 +1010,7 @@ class HODTaskListCreateAPIView(APIView):
             models.Q(department=department) | models.Q(assigned_to=request.user)
         )
 
-        if getattr(request.user, 'branch', None) in ['LNM', 'RYM']:
+        if getattr(request.user, 'branch', None) in get_valid_branch_codes():
             tasks = tasks.filter(
                 models.Q(assigned_to__branch=request.user.branch) |
                 models.Q(assigned_to__branch__isnull=True)
@@ -984,7 +1040,7 @@ class HODTaskListCreateAPIView(APIView):
         assigned_to = get_object_or_404(CustomUser, pk=employee_id)
         if assigned_to.pk != request.user.pk and assigned_to.role != role_slug:
             return Response({'error': 'Selected employee does not belong to this department.'}, status=status.HTTP_400_BAD_REQUEST)
-        if getattr(request.user, 'branch', None) in ['LNM', 'RYM'] and assigned_to.branch != request.user.branch:
+        if getattr(request.user, 'branch', None) in get_valid_branch_codes() and assigned_to.branch != request.user.branch:
             return Response({'error': 'You can assign tasks only inside your own branch.'}, status=status.HTTP_403_FORBIDDEN)
         due_date_raw = request.data.get('dueDate')
         due_date = None
@@ -997,7 +1053,7 @@ class HODTaskListCreateAPIView(APIView):
             patient = Patient.objects.filter(uhid=patient_uhid).first()
             if not patient:
                 return Response({'error': 'Selected patient was not found.'}, status=status.HTTP_400_BAD_REQUEST)
-            if assigned_to.branch in ['LNM', 'RYM'] and patient.branch_location != assigned_to.branch:
+            if assigned_to.branch in get_valid_branch_codes() and patient.branch_location != assigned_to.branch:
                 return Response({'error': 'Selected patient belongs to a different branch.'}, status=status.HTTP_400_BAD_REQUEST)
 
         priority_map = {'low': 'Low', 'medium': 'Medium', 'high': 'High'}
@@ -1047,7 +1103,7 @@ class HODAnalyticsAPIView(APIView):
         date_filter = request.query_params.get('date')
 
         tasks = Task.objects.select_related('assigned_to', 'patient').filter(department=department)
-        if getattr(request.user, 'branch', None) in ['LNM', 'RYM']:
+        if getattr(request.user, 'branch', None) in get_valid_branch_codes():
             tasks = tasks.filter(assigned_to__branch=request.user.branch)
         if employee_id:
             tasks = tasks.filter(assigned_to_id=employee_id)
@@ -1069,7 +1125,7 @@ class HODAnalyticsAPIView(APIView):
 
         employee_stats = []
         employee_queryset = CustomUser.objects.filter(role=role_slug)
-        if getattr(request.user, 'branch', None) in ['LNM', 'RYM']:
+        if getattr(request.user, 'branch', None) in get_valid_branch_codes():
             employee_queryset = employee_queryset.filter(branch=request.user.branch)
         for employee in employee_queryset:
             employee_tasks = [task for task in task_rows if task['employeeId'] == employee.id]
@@ -1100,7 +1156,7 @@ class HODReviewListCreateAPIView(APIView):
         department = request.query_params.get('department')
         reviews = HODReview.objects.select_related('employee', 'reviewed_by').filter(department=department).order_by('-created_at')
 
-        if getattr(request.user, 'branch', None) in ['LNM', 'RYM']:
+        if getattr(request.user, 'branch', None) in get_valid_branch_codes():
             reviews = reviews.filter(employee__branch=request.user.branch)
 
         payload = []
@@ -1150,7 +1206,7 @@ class HODReportDownloadAPIView(APIView):
         date_filter = request.query_params.get('date')
 
         tasks = Task.objects.select_related('assigned_to', 'patient').filter(department=department)
-        if getattr(request.user, 'branch', None) in ['LNM', 'RYM']:
+        if getattr(request.user, 'branch', None) in get_valid_branch_codes():
             tasks = tasks.filter(assigned_to__branch=request.user.branch)
         if employee_id:
             tasks = tasks.filter(assigned_to_id=employee_id)
@@ -1182,7 +1238,8 @@ class PerformanceRatingsAPIView(APIView):
         reviews = HODReview.objects.select_related('employee', 'reviewed_by').order_by('-created_at')
         payload = []
         for review in reviews:
-            branch = 'laxmi' if review.employee.branch == 'LNM' else 'raya'
+            branch_obj = HospitalSettings.objects.filter(branch=review.employee.branch).first()
+            branch = branch_obj.slug if branch_obj else str(review.employee.branch or '').lower()
             payload.append({
                 'staffName': review.employee.get_full_name().strip() or review.employee.username,
                 'staffId': review.employee.emp_id or review.employee.username,
@@ -1206,7 +1263,7 @@ class DepartmentLogListAPIView(APIView):
         department = request.query_params.get('department')
         queryset = DepartmentLogEntry.objects.filter(department=department)
 
-        if getattr(request.user, 'branch', None) in ['LNM', 'RYM']:
+        if getattr(request.user, 'branch', None) in get_valid_branch_codes():
             queryset = queryset.filter(branch=request.user.branch)
 
         serializer = DepartmentLogEntrySerializer(queryset.order_by('-record_date', '-created_at'), many=True)
@@ -1222,7 +1279,7 @@ class DepartmentLogBulkSaveAPIView(APIView):
         if department not in dict(DepartmentLogEntry.DEPARTMENT_CHOICES):
             return Response({'error': 'Invalid department.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        branch = getattr(request.user, 'branch', None) if getattr(request.user, 'branch', None) in ['LNM', 'RYM'] else (request.data.get('branch') or 'LNM')
+        branch = getattr(request.user, 'branch', None) if getattr(request.user, 'branch', None) in get_valid_branch_codes() else resolve_branch_code_from_loc(None, request.data.get('branch'))
         record_dates = sorted({coerce_record_date(department, entry) for entry in entries})
 
         with transaction.atomic():
@@ -1444,7 +1501,7 @@ class TaskEligibleEmployeesAPIView(APIView):
             if not role_slug:
                 return Response({"error": "Invalid department."}, status=status.HTTP_400_BAD_REQUEST)
             employees = CustomUser.objects.filter(role=role_slug)
-            if getattr(user, 'branch', None) in ['LNM', 'RYM']:
+        if getattr(user, 'branch', None) in get_valid_branch_codes():
                 employees = employees.filter(branch=user.branch)
         else:
             employees = CustomUser.objects.none()

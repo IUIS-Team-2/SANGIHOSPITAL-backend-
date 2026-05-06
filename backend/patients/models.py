@@ -5,9 +5,28 @@ from django.conf import settings
 from users.models import CustomUser
 from django.db import transaction
 
+
+def get_default_branch_code():
+    default_branch = HospitalSettings.objects.order_by('id').first()
+    return default_branch.branch if default_branch else 'LNM'
+
+
+def get_branch_settings(branch_code):
+    if not branch_code:
+        branch_code = get_default_branch_code()
+    settings_obj = HospitalSettings.objects.filter(branch=str(branch_code).upper()).first()
+    if settings_obj:
+        return settings_obj
+    return HospitalSettings(
+        branch=str(branch_code).upper(),
+        slug=str(branch_code).lower(),
+        branch_name=str(branch_code).upper(),
+        hospital_name="SANGI HOSPITAL",
+        uhid_prefix=str(branch_code).upper()[:3] or "SH",
+    )
+
 class Patient(models.Model):
-    BRANCH_CHOICES = [('LNM', 'Laxmi Nagar'), ('RYM', 'Raya')]
-    branch_location = models.CharField(max_length=3, choices=BRANCH_CHOICES, default='LNM')
+    branch_location = models.CharField(max_length=10, default='LNM')
     uhid = models.CharField(max_length=25, unique=True, blank=True)
     
     patientName = models.CharField(max_length=150)
@@ -36,10 +55,14 @@ class Patient(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
+        if not self.branch_location:
+            self.branch_location = get_default_branch_code()
+        self.branch_location = str(self.branch_location).upper()
+
         if not self.uhid:
-            prefix = "SHL" if self.branch_location == "LNM" else "SHR"
+            branch_settings = get_branch_settings(self.branch_location)
+            prefix = (branch_settings.uhid_prefix or self.branch_location or "SH").upper()
             with transaction.atomic():
-                # Lock all rows for this branch — prevents race conditions
                 last_patient = (
                     Patient.objects
                     .select_for_update()
@@ -327,13 +350,8 @@ class DepartmentLogEntry(models.Model):
         ('medical_officer', 'Medical Officer'),  
     )
 
-    BRANCH_CHOICES = (
-        ('LNM', 'Laxmi Nagar'),
-        ('RYM', 'Raya'),
-    )
-
     department = models.CharField(max_length=20, choices=DEPARTMENT_CHOICES)
-    branch = models.CharField(max_length=10, choices=BRANCH_CHOICES, default='LNM')
+    branch = models.CharField(max_length=10, default='LNM')
     record_date = models.DateField()
     data = models.JSONField(default=dict)
     created_by = models.ForeignKey('users.CustomUser', on_delete=models.SET_NULL, null=True, blank=True, related_name='department_logs_created')
@@ -342,6 +360,10 @@ class DepartmentLogEntry(models.Model):
 
     class Meta:
         ordering = ['-record_date', '-created_at']
+
+    def save(self, *args, **kwargs):
+        self.branch = str(self.branch or get_default_branch_code()).upper()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.department} log ({self.branch}) - {self.record_date}"
@@ -387,19 +409,26 @@ class Doctor(models.Model):
         return f"{self.name} - {self.qualification}"
 
 class HospitalSettings(models.Model):
-    # Match these exactly to your Patient model's BRANCH_CHOICES
-    BRANCH_CHOICES = [('LNM', 'Laxmi Nagar'), ('RYM', 'Raya')]
-    
-    branch = models.CharField(max_length=3, choices=BRANCH_CHOICES, unique=True, default='LNM')
-    
+    branch = models.CharField(max_length=10, unique=True, default='LNM')
+    slug = models.SlugField(max_length=50, unique=True, blank=True)
+    uhid_prefix = models.CharField(max_length=10, default='SHL')
     hospital_name = models.CharField(max_length=255, default="SANGI HOSPITAL")
     branch_name = models.CharField(max_length=255, default="Lakshmi Nagar Branch")
     address = models.TextField(default="Lakshmi Nagar, Mathura, Uttar Pradesh - 281004")
     phone = models.CharField(max_length=150, default="+91-9717444531 / +91-9717444532")
     email = models.EmailField(default="laxminagar@sangihospital.com")
     website = models.URLField(default="https://www.sangihospital.com")
-    
     logo = models.ImageField(upload_to='logos/', blank=True, null=True)
 
+    def save(self, *args, **kwargs):
+        self.branch = str(self.branch or '').upper()
+        if not self.slug:
+            self.slug = str(self.branch_name or self.branch or '').strip().lower().replace('&', 'and').replace('/', '-').replace(' ', '-')
+        self.slug = str(self.slug).strip().lower()
+        if not self.uhid_prefix:
+            self.uhid_prefix = (self.branch or 'SH')[:3].upper()
+        self.uhid_prefix = str(self.uhid_prefix).upper()
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.hospital_name} - {self.get_branch_display()}"
+        return f"{self.hospital_name} - {self.branch_name}"

@@ -11,6 +11,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "sangi_hospital.settings")
 django.setup()
 
 from users.models import CustomUser  # noqa: E402
+from patients.models import HospitalSettings  # noqa: E402
 
 
 DEFAULTS = {
@@ -19,12 +20,40 @@ DEFAULTS = {
     "email": os.getenv("SEED_SUPERADMIN_EMAIL", "gmy.healthcare@gmail.com"),
     "first_name": os.getenv("SEED_SUPERADMIN_FIRST_NAME", "Main"),
     "last_name": os.getenv("SEED_SUPERADMIN_LAST_NAME", "Yashi Kaushik"),
-    "emp_id": os.getenv("SEED_SUPERADMIN_EMP_ID", "SA-001"),
+    "emp_id": os.getenv("SEED_SUPERADMIN_EMP_ID", "SUA-000001"),
     "phone_number": os.getenv("SEED_SUPERADMIN_PHONE", ""),
 }
 
 
 def main():
+    defaults = [
+        {
+            "branch": "LNM",
+            "slug": "laxmi",
+            "uhid_prefix": "SHL",
+            "hospital_name": "SANGI HOSPITAL",
+            "branch_name": "Lakshmi Nagar",
+            "address": "Lakshmi Nagar, Mathura, Uttar Pradesh - 281004",
+            "phone": "+91-9717444531 / +91-9717444532",
+            "email": "laxminagar@sangihospital.com",
+            "website": "https://www.sangihospital.com",
+        },
+        {
+            "branch": "RYM",
+            "slug": "raya",
+            "uhid_prefix": "SHR",
+            "hospital_name": "SANGI HOSPITAL",
+            "branch_name": "Raya",
+            "address": "Raya, Mathura, Uttar Pradesh - 281204",
+            "phone": "+91-9311212090 / +91-9311212091",
+            "email": "info@sangihospital.com",
+            "website": "https://www.sangihospital.com",
+        },
+    ]
+
+    for payload in defaults:
+        HospitalSettings.objects.update_or_create(branch=payload["branch"], defaults=payload)
+
     username = DEFAULTS["username"]
     password = DEFAULTS["password"]
 

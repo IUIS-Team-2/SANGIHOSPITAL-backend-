@@ -15,6 +15,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import PasswordResetOTP
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.decorators import api_view, permission_classes
+from patients.models import HospitalSettings
 
 
 
@@ -27,8 +28,11 @@ BRANCH_STAFF_ROLES = {'receptionist'}
 # Combine them for general checks
 STAFF_ROLES = CENTRAL_STAFF_ROLES | BRANCH_STAFF_ROLES
 SUPERADMIN_MANAGED_ROLES = STAFF_ROLES | {'admin', 'office_admin'}
-BRANCH_CODES = {'LNM', 'RYM'}
 ALL_BRANCH_CODE = 'ALL'
+
+
+def get_branch_codes():
+    return set(HospitalSettings.objects.values_list('branch', flat=True))
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -41,7 +45,7 @@ def get_next_emp_id(request):
         branch = user.branch
     else:
         role = request.query_params.get('role', 'receptionist')
-        branch = request.query_params.get('branch', 'LNM')
+        branch = str(request.query_params.get('branch') or '').upper()
         
     central_roles = [
         'office_admin', 'hod', 'billing', 'opd', 'intimation', 
@@ -52,7 +56,7 @@ def get_next_emp_id(request):
     if role in central_roles:
         prefix = 'OFF'
     elif role in ['admin', 'receptionist']:
-        prefix = 'LXM' if branch == 'LNM' else 'RAY' if branch == 'RYM' else 'EMP'
+        prefix = branch[:3] if branch and branch != ALL_BRANCH_CODE else 'EMP'
     else:
         prefix = 'EMP'
         
@@ -124,15 +128,18 @@ def enforce_user_hierarchy(actor, payload, instance=None):
         data['branch'] = actor.branch
     else:
         branch = str(data.get('branch') or getattr(instance, 'branch', '') or '').strip().upper()
-        if branch not in BRANCH_CODES | {ALL_BRANCH_CODE}:
-            raise ValidationError({'branch': 'Branch must be LNM, RYM, or ALL for this role.'})
+        branch_codes = get_branch_codes()
+        if branch not in branch_codes | {ALL_BRANCH_CODE}:
+            raise ValidationError({'branch': 'Branch must be a valid branch code or ALL for this role.'})
         data['branch'] = branch
 
-    if target_role == 'admin' and data['branch'] not in BRANCH_CODES:
+    branch_codes = get_branch_codes()
+
+    if target_role == 'admin' and data['branch'] not in branch_codes:
         raise ValidationError({'branch': 'Branch Admin must belong to a single branch.'})
 
-    if target_role in STAFF_ROLES and data['branch'] not in BRANCH_CODES | {ALL_BRANCH_CODE}:
-        raise ValidationError({'branch': 'Staff accounts must belong to LNM, RYM, or ALL.'})
+    if target_role in STAFF_ROLES and data['branch'] not in branch_codes | {ALL_BRANCH_CODE}:
+        raise ValidationError({'branch': 'Staff accounts must belong to a valid branch or ALL.'})
 
     return data
 

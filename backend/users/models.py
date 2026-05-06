@@ -22,25 +22,21 @@ class CustomUser(AbstractUser):
         ('doctor', 'Doctor'),
     )
 
-    BRANCH_CHOICES = (
-        ('LNM', 'Laxmi Nagar'),
-        ('RYM', 'Raya'),
-        ('ALL', 'All Branches'),
-    )
-
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='receptionist')
-    branch = models.CharField(max_length=10, choices=BRANCH_CHOICES, null=True, blank=True)
+    branch = models.CharField(max_length=10, null=True, blank=True)
     emp_id = models.CharField(max_length=50, unique=True, null=True, blank=True)
     phone_number = models.CharField(max_length=15, null=True, blank=True)
 
     def save(self, *args, **kwargs):
+        if self.branch:
+            self.branch = str(self.branch).upper()
         if not self.emp_id:
             central_roles = ['office_admin', 'hod', 'billing', 'opd', 'intimation', 'query', 'uploading', 'nursing', 'notes', 'medical_officer', 'quality_analyst', 'superadmin']
             
             if self.role in central_roles:
                 prefix = 'OFF'
             elif self.role in ['admin', 'receptionist']:
-                prefix = 'LXM' if self.branch == 'LNM' else 'RAY' if self.branch == 'RYM' else 'EMP'
+                prefix = (self.branch or 'EMP')[:3]
             else:
                 prefix = 'EMP'
 

@@ -4,9 +4,14 @@ import re
 from rest_framework import serializers
 from .models import CustomUser
 from django.db import transaction
+from patients.models import HospitalSettings
 
 
 GLOBAL_ACCESS_ROLES = {'superadmin', 'office_admin'}
+
+
+def get_branch_codes():
+    return set(HospitalSettings.objects.values_list('branch', flat=True))
 
 def get_employee_id_prefix(role, branch):
     central_roles = [
@@ -18,10 +23,9 @@ def get_employee_id_prefix(role, branch):
         return 'OFF'
     
     if role in ['admin', 'receptionist']:
-        if branch == 'LNM':
-            return 'LXM'
-        if branch == 'RYM':
-            return 'RAY'
+        branch = str(branch or '').upper()
+        if branch and branch != 'ALL':
+            return branch[:3]
             
     return 'EMP'
 
@@ -98,6 +102,7 @@ class UserManagementSerializer(serializers.ModelSerializer):
         branch = str(data.get('branch') or getattr(self.instance, 'branch', '') or '').strip().upper()
         role = str(data.get('role') or getattr(self.instance, 'role', 'receptionist')).strip()
         emp_id = str(data.get('emp_id') or getattr(self.instance, 'emp_id', '') or '').strip().upper()
+        branch_codes = get_branch_codes()
         
         expected_prefix = get_employee_id_prefix(role, branch)
 
@@ -107,6 +112,9 @@ class UserManagementSerializer(serializers.ModelSerializer):
         if password or confirm_password:
             if password != confirm_password:
                 raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+
+        if role not in GLOBAL_ACCESS_ROLES and branch and branch not in branch_codes:
+            raise serializers.ValidationError({"branch": "Selected branch does not exist."})
 
         if self.instance is None:
             if emp_id and expected_prefix and not emp_id.startswith(expected_prefix):

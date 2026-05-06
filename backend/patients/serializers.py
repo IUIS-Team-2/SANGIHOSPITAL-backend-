@@ -21,6 +21,7 @@ from .models import (
     ReportMaster,      
     MedicineMaster,    
     PharmacyRecord,    
+    HospitalSettings,
 )
 
 
@@ -281,6 +282,9 @@ class PatientSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         current_patient_id = self.instance.id if self.instance else None
+        branch_location = str(data.get('branch_location') or getattr(self.instance, 'branch_location', '') or '').strip().upper()
+        if branch_location and not HospitalSettings.objects.filter(branch=branch_location).exists():
+            raise serializers.ValidationError({"branch_location": "Selected hospital branch does not exist."})
         phone = data.get('phone')
         if phone:
             phone_query = Patient.objects.filter(phone=phone)
@@ -407,6 +411,30 @@ class PharmacyRecordSerializer(serializers.ModelSerializer):
         if 'expiry_date' in data: data['expiry'] = data.pop('expiry_date')
         data['total'] = float(data.get('rate', 0)) * int(data.get('quantity', 1))
         return data
+
+
+class HospitalSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HospitalSettings
+        fields = '__all__'
+
+    def validate_branch(self, value):
+        branch = str(value or '').strip().upper()
+        if not branch:
+            raise serializers.ValidationError("Branch code is required.")
+        return branch
+
+    def validate_slug(self, value):
+        slug = str(value or '').strip().lower()
+        if not slug:
+            raise serializers.ValidationError("Branch slug is required.")
+        return slug
+
+    def validate_uhid_prefix(self, value):
+        prefix = str(value or '').strip().upper()
+        if not prefix:
+            raise serializers.ValidationError("UHID prefix is required.")
+        return prefix
 
     def to_internal_value(self, data):
         resource_data = data.copy()
