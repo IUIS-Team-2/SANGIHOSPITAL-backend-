@@ -403,7 +403,7 @@ class PatientViewSet(viewsets.ModelViewSet):
             print("🚨 AUTO-ADMISSION FAILED:", str(e))
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=['post'], url_path='new-admission')
+    @action(detail=True, methods=['post'], url_path='new_admission')
     def new_admission(self, request, uhid=None): 
         try:
             # 🌟 THE FIX: Fetch the patient manually using the UHID from the URL

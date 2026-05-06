@@ -1,5 +1,5 @@
 import datetime
-
+import re 
 from rest_framework import serializers
 from django.db import transaction
 from django.utils import timezone
@@ -279,6 +279,28 @@ class PatientSerializer(serializers.ModelSerializer):
                 resource_data[field] = None
                 
         return super().to_internal_value(resource_data)
+    
+    def validate_phone(self, value):
+        if not value:
+            raise serializers.ValidationError("Phone number is required.")
+        digits_only = re.sub(r'\D', '', value)
+        if not value.replace('+','').replace('-','').replace(' ','').isdigit():
+            raise serializers.ValidationError("Phone can only contain digits.")
+        if len(digits_only) < 10:
+            raise serializers.ValidationError("Phone number must be at least 10 digits.")
+        return value
+
+def validate_patientName(self, value):
+    if not value or not value.strip():
+        raise serializers.ValidationError("Patient name is required.")
+    if re.search(r'\d', value):
+        raise serializers.ValidationError("Patient name cannot contain numbers.")
+    return value.strip()
+
+def validate_guardianName(self, value):
+    if value and re.search(r'\d', value):
+        raise serializers.ValidationError("Guardian name cannot contain numbers.")
+    return value
 
     def validate(self, data):
         current_patient_id = self.instance.id if self.instance else None

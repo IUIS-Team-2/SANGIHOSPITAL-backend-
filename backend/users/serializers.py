@@ -95,6 +95,36 @@ class UserManagementSerializer(serializers.ModelSerializer):
         if not re.search(r'[!@#$%^&*(),.?":{}|<>]', value):
             raise serializers.ValidationError("Password must contain at least one special character.")
         return value
+    
+    def validate_first_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("First name is required.")
+        if re.search(r'\d', value):
+            raise serializers.ValidationError("Name cannot contain numbers.")
+        if re.search(r'[!@#$%^&*()_+=\[\]{};\'\\:"|,.<>\/?]', value):
+            raise serializers.ValidationError("Name cannot contain special characters.")
+        if len(value) < 2:
+            raise serializers.ValidationError("Name must be at least 2 characters.")
+        return value
+
+    def validate_last_name(self, value):
+        if value and value.strip() != ".":   # "." is the placeholder for no last name
+            if re.search(r'\d', value):
+                raise serializers.ValidationError("Last name cannot contain numbers.")
+        return value
+
+def validate_phone_number(self, value):
+    if not value:
+        return value  # optional field
+    digits_only = re.sub(r'\D', '', value)
+    if not value.replace('+', '').replace('-', '').replace(' ', '').isdigit():
+        raise serializers.ValidationError("Phone number can only contain digits, +, - and spaces.")
+    if len(digits_only) < 10:
+        raise serializers.ValidationError("Phone number must be at least 10 digits.")
+    if len(digits_only) > 15:
+        raise serializers.ValidationError("Phone number must be at most 15 digits.")
+    return value
 
     def validate(self, data):
         password = data.get('password')
