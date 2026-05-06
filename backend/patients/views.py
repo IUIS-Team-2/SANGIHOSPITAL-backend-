@@ -1804,3 +1804,29 @@ class PrintBillView(APIView):
             return response
             
         return Response({"error": "PDF Generation Failed"}, status=status.HTTP_400_BAD_REQUEST)
+
+class AdminDashboardStatsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        
+        # 1. Security: Only Admins can see this dashboard data
+        if user.role not in ['superadmin', 'office_admin', 'admin']:
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        today = timezone.now().date()
+        
+        # 2. Get all discharges where the Date of Discharge (dod) is today
+        todays_discharges = Discharge.objects.filter(dod__date=today)
+
+        # 3. If it's a Branch Admin, strictly filter to ONLY show their branch!
+        if user.role == 'admin':
+            todays_discharges = todays_discharges.filter(admission__patient__branch_location=user.branch)
+
+        # 4. Return the exact count to the frontend
+        return Response({
+            "todaysDischargeCount": todays_discharges.count(),
+            # 💡 Pro-tip: You can easily add more stats here later! 
+            # Example: "totalPatients": Patient.objects.filter(branch_location=user.branch).count()
+        }, status=status.HTTP_200_OK)
