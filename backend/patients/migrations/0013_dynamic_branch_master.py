@@ -39,6 +39,22 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AlterField(
+            model_name='hospitalsettings',
+            name='branch',
+            field=models.CharField(default='LNM', max_length=10, unique=True),
+        ),
+        migrations.AddField(
+            model_name='hospitalsettings',
+            name='slug',
+            field=models.SlugField(blank=True, default='', max_length=50, unique=True),
+            preserve_default=False,
+        ),
+        migrations.AddField(
+            model_name='hospitalsettings',
+            name='uhid_prefix',
+            field=models.CharField(default='SHL', max_length=10),
+        ),
+        migrations.AlterField(
             model_name='departmentlogentry',
             name='branch',
             field=models.CharField(default='LNM', max_length=10),
