@@ -1,0 +1,307 @@
+
+<style>
+  .w{padding:1.2rem;font-family:var(--font-sans);max-width:980px}
+  h2{font-size:17px;font-weight:500;color:var(--color-text-primary);margin:0 0 3px}
+  .sub{font-size:12px;color:var(--color-text-secondary);margin:0 0 14px}
+  .tab-bar{display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap}
+  .tab{padding:4px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid var(--color-border-tertiary);background:transparent;color:var(--color-text-secondary)}
+  .tab.active{background:var(--color-text-primary);color:var(--color-background-primary);border-color:transparent}
+  .panel{display:none}.panel.active{display:block}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px}
+  th{background:var(--color-background-tertiary);padding:8px 10px;text-align:left;font-weight:600;color:var(--color-text-secondary);font-size:11px;text-transform:uppercase;border:1px solid var(--color-border-tertiary)}
+  td{padding:7px 10px;border:1px solid var(--color-border-tertiary);color:var(--color-text-primary);vertical-align:top}
+  tr:nth-child(even) td{background:var(--color-background-secondary)}
+  .m{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;white-space:nowrap}
+  .get{background:#dbeafe;color:#1e40af}.post{background:#dcfce7;color:#166534}.patch{background:#fef9c3;color:#854d0e}.delete{background:#fee2e2;color:#991b1b}.put{background:#ede9fe;color:#5b21b6}
+  .card{border:1px solid var(--color-border-tertiary);border-radius:9px;padding:13px 15px;margin-bottom:10px;background:var(--color-background-secondary)}
+  .lbl{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;white-space:nowrap}
+  .red{background:var(--color-background-danger);color:var(--color-text-danger)}
+  .grn{background:var(--color-background-success);color:var(--color-text-success)}
+  .ttl{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:5px}
+  .bod{font-size:12.5px;color:var(--color-text-secondary);line-height:1.65}
+  code{font-family:var(--font-mono);font-size:11px;background:var(--color-background-tertiary);padding:1px 5px;border-radius:4px;color:var(--color-text-primary)}
+  .fix{background:var(--color-background-tertiary);border-radius:7px;padding:10px 13px;font-family:var(--font-mono);font-size:11.5px;line-height:1.75;margin:7px 0;overflow-x:auto;white-space:pre}
+  .kw{color:#7C6FF7}.fn{color:#1D9E75}.str{color:#BA7517}.cm{color:var(--color-text-tertiary)}.add{color:var(--color-text-success)}.del{color:var(--color-text-danger)}
+  h3{font-size:13px;font-weight:600;color:var(--color-text-primary);margin:14px 0 7px}
+  .ftag{font-size:10px;font-family:var(--font-mono);background:var(--color-background-tertiary);border:1px solid var(--color-border-secondary);padding:2px 7px;border-radius:4px;color:var(--color-text-secondary);display:inline-block;margin-bottom:6px}
+</style>
+<div class="w">
+  <h2>Sangi Hospital — Complete API Reference by Dashboard</h2>
+  <p class="sub">Every API endpoint grouped by which dashboard uses it, plus bug analyses</p>
+
+  <div class="tab-bar">
+    <button class="tab active" onclick="s('auth')">Auth / Common</button>
+    <button class="tab" onclick="s('reception')">Reception</button>
+    <button class="tab" onclick="s('branch')">Branch Admin</button>
+    <button class="tab" onclick="s('office')">Office Admin</button>
+    <button class="tab" onclick="s('super')">Super Admin</button>
+    <button class="tab" onclick="s('hod')">HOD</button>
+    <button class="tab" onclick="s('staff')">Staff Dashboards</button>
+    <button class="tab" onclick="s('billing_bug')">Billing Bug</button>
+    <button class="tab" onclick="s('lxm_bug')">LXM Default Bug</button>
+  </div>
+
+  <!-- AUTH -->
+  <div id="auth" class="panel active">
+    <h3>Authentication & User Profile — used by ALL dashboards</h3>
+    <table>
+      <tr><th>Method</th><th>Endpoint</th><th>What it does</th></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/users/login/</code></td><td>JWT login — returns access + refresh token with user role, branch, emp_id in payload</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/users/me/</code></td><td>Returns the logged-in user's own profile (name, role, branch, emp_id)</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/users/request-reset-otp/</code></td><td>Sends a 6-digit OTP to the user's email for password reset (Gmail SMTP)</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/users/verify-reset-otp/</code></td><td>Verifies the OTP and sets a new password</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/hospital-settings/</code></td><td>Returns all branch settings (name, address, phone, logo) — public, no auth needed</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/service-master/</code></td><td>Returns list of all services (name, category, cash price, cashless price)</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/doctors/</code></td><td>Returns list of all doctors for dropdown</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/medicine-master/</code></td><td>Returns full medicine inventory list</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/report-master/</code></td><td>Returns lab report template master list</td></tr>
+    </table>
+  </div>
+
+  <!-- RECEPTION -->
+  <div id="reception" class="panel">
+    <h3>Receptionist Dashboard</h3>
+    <p class="sub">Can only see and manage patients of their own branch</p>
+    <table>
+      <tr><th>Method</th><th>Endpoint</th><th>What it does</th></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/</code></td><td>List all patients in their branch (filtered by branch_location automatically)</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/patients/</code></td><td>Register a new patient + auto-create admission 1 with the given admission type</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/{uhid}/</code></td><td>Fetch full patient profile including all admissions, billing, medical history</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/patients/{uhid}/</code></td><td>Update patient demographics (name, phone, address, TPA details etc.)</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/patients/{uhid}/new_admission/</code></td><td>Create a new admission for an existing patient (UHID stays same, new IPD number generated)</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/patients/{uhid}/update_medical/</code></td><td>Save medical history for a specific admission (complaints, vitals, diagnosis etc.)</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/patients/{uhid}/discharge/</code></td><td>Save discharge data (ward, room, bed, doctor, DOD, discharge status)</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/patients/{uhid}/update_billing/</code></td><td>Save billing info (discount, advance, payment mode, insurance type) — sets bill_type to CASH or CASHLESS</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/patients/{uhid}/add_service/</code></td><td>Add a single service to a specific admission</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/patients/{uhid}/admissions/{adm_no}/services/bulk-save/</code></td><td>Replace all services for an admission in one call (deletes old, inserts new list)</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/patients/{uhid}/request_print/</code></td><td>Mark billing as PENDING print — sends to Super Admin approval queue</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/{uhid}/admissions/{adm_no}/lab-reports/</code></td><td>Get all lab reports for a specific admission</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/patients/{uhid}/admissions/{adm_no}/lab-reports/</code></td><td>Create/update a single lab report for an admission</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/patients/{uhid}/admissions/{adm_no}/lab-reports/bulk-save/</code></td><td>Replace all lab reports for an admission in one call</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/{uhid}/admissions/{adm_no}/lab-report-templates/</code></td><td>Get suggested lab report templates based on the patient's diagnosis</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/{uhid}/admissions/{adm_no}/pharmacy-records/</code></td><td>Get pharmacy/medicine records for a specific admission</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/patients/{uhid}/admissions/{adm_no}/pharmacy-records/</code></td><td>Add a single pharmacy record</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/patients/{uhid}/admissions/{adm_no}/pharmacy-records/bulk-save/</code></td><td>Replace all pharmacy records for an admission</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/{uhid}/admissions/{adm_no}/dynamic-summary/</code></td><td>Get or generate discharge summary (Normal/LAMA/Refer/DOPR/Death)</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/patients/{uhid}/admissions/{adm_no}/dynamic-summary/</code></td><td>Save the discharge summary with filled-in content</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/{uhid}/admissions/{adm_no}/dynamic-summary/print/</code></td><td>Generate and return PDF of discharge summary</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/{uhid}/admissions/{adm_no}/bill/print/</code></td><td>Generate and return PDF of the final bill</td></tr>
+    </table>
+  </div>
+
+  <!-- BRANCH ADMIN -->
+  <div id="branch" class="panel">
+    <h3>Branch Admin Dashboard</h3>
+    <p class="sub">Sees all patients of their branch (cash + cashless, but cashless service amounts are hidden). Can create/manage Receptionist accounts only.</p>
+    <table>
+      <tr><th>Method</th><th>Endpoint</th><th>What it does</th></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/</code></td><td>List all patients in their branch — cashless patients visible, but service amounts hidden</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/{uhid}/</code></td><td>Full patient profile — cashless amounts stripped by serializer for branch admin</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/patients/{uhid}/set_expected_dod/</code></td><td>Set the expected date of discharge for a patient's admission</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/admin/dashboard/stats/</code></td><td>Get today's discharge count for their branch (dashboard stat card)</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/users/manage/</code></td><td>List all receptionist accounts in their branch</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/users/manage/</code></td><td>Create a new Receptionist account (branch-restricted, only Receptionist role allowed)</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/users/manage/{id}/</code></td><td>Get details of a specific user account</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/users/manage/{id}/</code></td><td>Update a receptionist account (name, active status)</td></tr>
+      <tr><td><span class="m delete">DELETE</span></td><td><code>/api/users/manage/{id}/</code></td><td>Delete a receptionist account</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/users/manage/{id}/reset-password/</code></td><td>Reset a receptionist's password (admin action)</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/users/next-emp-id/</code></td><td>Preview the next auto-generated employee ID before creation</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/tasks/report/</code></td><td>Get task performance report for all staff in their branch</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/tasks/eligible-employees/</code></td><td>Get list of employees they can assign tasks to (branch-scoped)</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/tasks/bulk-assign/</code></td><td>Bulk-assign multiple patients to a single employee</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/tasks/analytics/</code></td><td>Get task analytics — total/completed/pending per employee</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/doctors/</code></td><td>Get doctor list (can only add/edit/delete if admin)</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/doctors/</code></td><td>Add a new doctor to the list</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/doctors/{id}/</code></td><td>Update a doctor's details</td></tr>
+      <tr><td><span class="m delete">DELETE</span></td><td><code>/api/doctors/{id}/</code></td><td>Remove a doctor</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/patients/{uhid}/resolve_print/</code></td><td>Approve or reject a print request — branch admin has this power too</td></tr>
+    </table>
+  </div>
+
+  <!-- OFFICE ADMIN -->
+  <div id="office" class="panel">
+    <h3>Office Admin Dashboard</h3>
+    <p class="sub">Sees all patients from BOTH branches. Only sees cashless patients via the cashless-records endpoint (with full amounts visible). Can create billing/HOD/OPD/intimation/query/uploading/nursing/notes/medical_officer/quality_analyst accounts.</p>
+    <table>
+      <tr><th>Method</th><th>Endpoint</th><th>What it does</th></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/</code></td><td>All patients from all branches (office admin bypass — no branch filter)</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/cashless-records/</code></td><td>All patients with cashless billing — full amounts visible, for corporate/TPA reconciliation</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/{uhid}/</code></td><td>Full patient record with all service amounts visible</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/admin/dashboard/stats/</code></td><td>Today's discharge count across all branches</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/tasks/report/</code></td><td>Task performance report for all staff across all branches</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/tasks/eligible-employees/</code></td><td>All assignable employees across all branches</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/tasks/bulk-assign/</code></td><td>Bulk-assign multiple patients to a staff member</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/tasks/analytics/</code></td><td>Task analytics across all branches</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/tasks/</code></td><td>List all tasks (full visibility)</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/tasks/</code></td><td>Create a new task for any employee</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/tasks/{id}/</code></td><td>Get a specific task detail</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/tasks/{id}/</code></td><td>Update any task (status, notes, assignment)</td></tr>
+      <tr><td><span class="m delete">DELETE</span></td><td><code>/api/tasks/{id}/</code></td><td>Delete a task</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/users/manage/</code></td><td>List all central-role staff (billing, HOD, OPD, intimation etc.) across all branches</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/users/manage/</code></td><td>Create central-role staff accounts (billing/HOD/OPD/intimation/query/uploading etc.)</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/users/manage/{id}/</code></td><td>Update staff account</td></tr>
+      <tr><td><span class="m delete">DELETE</span></td><td><code>/api/users/manage/{id}/</code></td><td>Deactivate/delete staff account</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/users/manage/{id}/reset-password/</code></td><td>Reset any staff member's password</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/hod/performance-ratings/</code></td><td>View all HOD performance reviews across branches</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/medicine-master/import-excel/</code></td><td>Import medicine master data from Excel file (replaces all existing records)</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/department-logs/</code></td><td>View department daily logs (OPD, intimation, query etc.)</td></tr>
+    </table>
+  </div>
+
+  <!-- SUPER ADMIN -->
+  <div id="super" class="panel">
+    <h3>Super Admin Dashboard</h3>
+    <p class="sub">Full access to everything. Can create Branch Admin and Office Admin accounts. Manages hospital branches/settings. Approves print requests.</p>
+    <table>
+      <tr><th>Method</th><th>Endpoint</th><th>What it does</th></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/</code></td><td>All patients from all branches — full visibility</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/pending_prints/</code></td><td>List all patients with billing status = PENDING (waiting for print approval)</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/patients/{uhid}/resolve_print/</code></td><td>Approve or reject a print request — sets status to APPROVED or REJECTED</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/admin/dashboard/stats/</code></td><td>Today's discharge count across all branches</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/users/manage/</code></td><td>List ALL users in the system</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/users/manage/</code></td><td>Create Branch Admin or Office Admin accounts</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/users/manage/{id}/</code></td><td>Edit any user account</td></tr>
+      <tr><td><span class="m delete">DELETE</span></td><td><code>/api/users/manage/{id}/</code></td><td>Delete any user account (cannot delete own)</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/users/manage/{id}/reset-password/</code></td><td>Reset any user's password</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/hospital-settings/</code></td><td>View all branch settings</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/hospital-settings/</code></td><td>Create a new hospital branch</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/hospital-settings/{id}/</code></td><td>Update branch details (name, address, phone, logo etc.)</td></tr>
+      <tr><td><span class="m delete">DELETE</span></td><td><code>/api/hospital-settings/{id}/</code></td><td>Delete a branch (only if no patients or users exist in it)</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/medicine-master/import-excel/</code></td><td>Import medicine master from Excel</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/tasks/report/</code></td><td>Full task performance report</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/tasks/analytics/</code></td><td>Task analytics overview</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/hod/performance-ratings/</code></td><td>All HOD performance reviews</td></tr>
+    </table>
+  </div>
+
+  <!-- HOD -->
+  <div id="hod" class="panel">
+    <h3>HOD Dashboard</h3>
+    <p class="sub">Sees patients in their branch (or all branches if branch=ALL). Can see all cashless patients. Manages tasks and reviews for their department's staff.</p>
+    <table>
+      <tr><th>Method</th><th>Endpoint</th><th>What it does</th></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/</code></td><td>Patients in their branch (or all if branch=ALL)</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/{uhid}/</code></td><td>Full patient record</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/patients/{uhid}/set_expected_dod/</code></td><td>Set expected date of discharge</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/hod/employees/?department=Billing</code></td><td>List all employees in a specific department (for task assignment dropdowns)</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/hod/tasks/?department=Billing</code></td><td>List all tasks for a department — can filter by employee, date, status</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/hod/tasks/</code></td><td>Assign a single task to a department employee (one patient per call)</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/hod/tasks/{id}/</code></td><td>Update a task (status, priority, notes)</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/hod/analytics/?department=Billing</code></td><td>Task analytics for a department — per-employee completion stats</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/hod/reviews/?department=Billing</code></td><td>List all performance reviews for a department</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/hod/reviews/</code></td><td>Submit a performance review for a staff member</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/hod/reports/download/?department=Billing</code></td><td>Download a CSV report of all tasks for a department</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/tasks/eligible-employees/</code></td><td>Get employees they can assign to (department-scoped for HOD)</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/tasks/bulk-assign/</code></td><td>Bulk-assign multiple patients to an employee (HOD now allowed after our fix)</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/tasks/report/</code></td><td>Task performance summary</td></tr>
+    </table>
+  </div>
+
+  <!-- STAFF -->
+  <div id="staff" class="panel">
+    <h3>Staff Sub-Dashboards (Billing, OPD, Intimation, Query, Uploading, Nursing, Notes, Medical Officer, Quality Analyst)</h3>
+    <p class="sub">All staff roles share the same API pattern. They only see patients assigned to them via tasks. They submit their work back through the task update endpoint.</p>
+    <table>
+      <tr><th>Method</th><th>Endpoint</th><th>What it does</th></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/</code></td><td>Only returns patients where a task is assigned to this specific employee — no cross-visibility</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/{uhid}/</code></td><td>Full patient record (service amounts shown only if cash; cashless amounts hidden)</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/tasks/my-tasks/</code></td><td>Employee's own task list — pending/in-progress tasks float to top, older first</td></tr>
+      <tr><td><span class="m patch">PATCH</span></td><td><code>/api/tasks/{task_id}/update-status/</code></td><td>Employee submits/updates task — marks Completed, adds work notes. Once completed, locked from further edits by employee</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/{uhid}/admissions/{adm_no}/lab-reports/</code></td><td>View lab reports for assigned patient (used by medical_officer/notes roles)</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/patients/{uhid}/admissions/{adm_no}/lab-reports/bulk-save/</code></td><td>Save lab reports (medical/notes dashboard)</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/patients/{uhid}/admissions/{adm_no}/pharmacy-records/</code></td><td>View pharmacy records (nursing dashboard)</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/patients/{uhid}/admissions/{adm_no}/pharmacy-records/bulk-save/</code></td><td>Save pharmacy/medicine records (nursing dashboard)</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/department-logs/</code></td><td>View own department's daily log entries</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/department-logs/bulk-save/</code></td><td>Submit daily department log (OPD count, intimation count, query entries etc.)</td></tr>
+    </table>
+  </div>
+
+  <!-- BILLING BUG -->
+  <div id="billing_bug" class="panel">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="lbl red">BACKEND BUG</span><div class="ttl">Payment mode changes for OLD admission when new admission is created</div></div>
+      <div class="bod">
+        <strong>Root cause — <code>get_preferred_admission_for_patient()</code> in <code>patients/serializers.py</code></strong><br><br>
+        When the frontend loads a patient, it reads <code>patient.current_admission_detail</code> (not the full admissions array). This field is populated by <code>get_current_admission_detail()</code> in <code>PatientSerializer</code>, which calls <code>get_preferred_admission_for_patient()</code>.<br><br>
+        That function picks the <strong>latest active admission</strong> (highest timestamp / admNo). So after you create Admission 2 (cash), it becomes the "preferred" admission. Every dashboard now shows Admission 2's billing — cash — even when the receptionist is looking at Admission 1's record.<br><br>
+        Additionally, <code>AdmissionSerializer.get_billing()</code> does <code>obj.bills.order_by('-id').first()</code> — this always returns the most recent billing record, not the one for the specific admission.
+      </div>
+    </div>
+    <div class="card">
+      <div class="ttl" style="margin-bottom:6px">Fix — <code>backend/patients/serializers.py</code></div>
+      <div class="ftag">patients/serializers.py — get_preferred_admission_for_patient()</div>
+      <div class="bod" style="margin-bottom:6px">The function is correct — it should return the latest active admission. The real problem is dashboards using <code>current_admission_detail</code> when they should be showing <strong>per-admission data</strong>. The fix is to ensure each <code>AdmissionSerializer</code> returns its <em>own</em> billing, not a cross-admission one. The billing serializer is already correct. The actual issue is the frontend reads <code>patient.current_admission_detail.billing.bill_type</code> to determine the payment display for the whole patient — this should instead read from the specific admission being viewed.</div>
+      <div class="fix"><span class="cm"># The billing is correctly scoped per admission in AdmissionSerializer:</span>
+<span class="kw">def</span> <span class="fn">get_billing</span>(self, obj):
+    billing = obj.bills.order_by(<span class="str">'-id'</span>).first()  <span class="cm"># ← this is correct — per admission</span>
+
+<span class="cm"># HOWEVER — the patient-level cashless_records filter is wrong:</span>
+<span class="cm"># In PatientViewSet.cashless_records and get_queryset for HOD:</span>
+Patient.objects.filter(admissions__bills__bill_type=<span class="str">'CASHLESS'</span>).distinct()
+<span class="cm"># This returns a patient if ANY admission is cashless — even if current admission is cash.</span>
+<span class="cm"># This is what causes the confusion in dashboards.</span>
+
+<span class="cm"># FIX: Add an annotation so the frontend knows which admissions are cashless:</span>
+<span class="cm"># In AdmissionSerializer.to_representation(), add:</span>
+<span class="kw">def</span> <span class="fn">to_representation</span>(self, instance):
+    data = <span class="kw">super</span>().to_representation(instance)
+    <span class="add">billing = instance.bills.order_by('-id').first()
+    data['bill_type'] = billing.bill_type if billing else 'CASH'</span>
+    <span class="cm"># ... rest of method</span>
+    <span class="kw">return</span> data</div>
+      <div class="bod" style="margin-top:8px">After this, each admission in <code>patient.admissions[]</code> will have its own <code>bill_type</code> field. Tell your frontend dev: when showing billing details, always read from the <strong>specific admission object</strong> the user is currently viewing — not from <code>current_admission_detail</code> which always points to the latest one.</div>
+    </div>
+  </div>
+
+  <!-- LXM BUG -->
+  <div id="lxm_bug" class="panel">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="lbl red">BACKEND + FRONTEND</span><div class="ttl">Why "LXM" / Lakshmi Nagar is always selected as default branch</div></div>
+      <div class="bod">
+        <strong>Backend side:</strong><br>
+        In <code>patients/models.py</code>, the <code>Patient</code> model has:<br>
+        <code>branch_location = models.CharField(max_length=10, default='LNM')</code><br>
+        And <code>Patient.save()</code> calls <code>get_default_branch_code()</code> which does:<br>
+        <code>HospitalSettings.objects.order_by('id').first()</code><br>
+        This returns whichever branch was created first in the DB. If Lakshmi Nagar was the first branch created, it will always be the default.<br><br>
+        <strong>Frontend side:</strong><br>
+        In <code>SuperAdminDashboard.jsx</code>:<br>
+        <code>const defaultBranchSlug = branches[0]?.slug || "laxmi"</code><br>
+        The frontend takes the first branch returned by <code>/api/hospital-settings/</code> as the default. The hospital-settings endpoint returns branches ordered by DB insertion order (no explicit ordering). Since Lakshmi Nagar was first created, it comes back first → <code>branches[0]</code> = LXM.
+      </div>
+    </div>
+    <div class="card">
+      <div class="ttl" style="margin-bottom:6px">Fix — Backend only (frontend will auto-fix once backend sends correct order)</div>
+      <div class="ftag">patients/models.py — get_default_branch_code()</div>
+      <div class="fix"><span class="cm"># Current (uses DB insertion order):</span>
+<span class="kw">def</span> <span class="fn">get_default_branch_code</span>():
+    default_branch = HospitalSettings.objects.order_by(<span class="str">'id'</span>).first()
+    <span class="kw">return</span> default_branch.branch <span class="kw">if</span> default_branch <span class="kw">else</span> <span class="str">'LNM'</span>
+
+<span class="cm"># This is expected behaviour — whoever is logged in, THEIR branch should be the default.</span>
+<span class="cm"># The real fix is: don't use a model-level default at all.</span>
+<span class="cm"># In Patient.save(), the branch is always set from the request data in PatientViewSet.create().</span>
+<span class="cm"># The default only matters if no branch is sent — which means the frontend isn't sending it.</span></div>
+      <div class="ftag" style="margin-top:10px">backend/patients/views.py — PatientViewSet.create()</div>
+      <div class="fix"><span class="cm"># In create(), after resolving branch, add this fallback:</span>
+<span class="kw">def</span> <span class="fn">create</span>(self, request, *args, **kwargs):
+    data = request.data.copy()
+    <span class="add">
+    # If no branch sent, use the logged-in user's branch (not DB first branch)
+    if not data.get('branch_location') and not data.get('locId'):
+        if getattr(request.user, 'branch', None) not in [None, 'ALL']:
+            data['branch_location'] = request.user.branch
+    </span>
+    <span class="cm"># ... rest of create unchanged</span></div>
+      <div class="bod" style="margin-top:8px">This ensures that when a receptionist registers a patient and the frontend forgets to send the branch, it defaults to <strong>the receptionist's own branch</strong> — not whatever was first in the DB. If the receptionist is from RYM, the patient gets RYM. No more LXM-as-universal-default.</div>
+    </div>
+  </div>
+</div>
+<script>
+function s(id){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>

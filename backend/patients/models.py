@@ -42,8 +42,7 @@ class Patient(models.Model):
     nationalId = models.CharField(max_length=50)
     remarks = models.TextField(blank=True)
     allergies = models.TextField(blank=True)
-    
-    payMode = models.CharField(max_length=20, default='cash')
+    payMode = models.CharField(max_length=20)
     cashlessType = models.CharField(max_length=20, blank=True)
     tpa = models.CharField(max_length=100, blank=True)
     tpaCard = models.CharField(max_length=50, blank=True)

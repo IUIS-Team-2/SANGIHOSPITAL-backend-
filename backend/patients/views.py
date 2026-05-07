@@ -385,6 +385,11 @@ class PatientViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
         admission_type = data.pop('admissionType', None) or request.data.get('admissionType') or 'IPD'
+
+         # If no branch sent, use the logged-in user's branch (not DB first branch)
+        if not data.get('branch_location') and not data.get('locId'):
+            if getattr(request.user, 'branch', None) not in [None, 'ALL']:
+                data['branch_location'] = request.user.branch
         
         if 'locId' in data or 'branch_location' in data:
             data['branch_location'] = resolve_branch_code_from_loc(data.get('locId'), data.get('branch_location'))
@@ -498,7 +503,7 @@ class PatientViewSet(viewsets.ModelViewSet):
                     
                 setattr(billing_obj, key, value)
 
-            pay_mode = str(getattr(patient, 'payMode', '') or billing_data.get('paymentMode') or '')
+            pay_mode = str(billing_data.get('paymentMode') or getattr(billing_obj, 'paymentMode', '') or '')
             insurance_type = str(billing_data.get('insuranceType') or getattr(billing_obj, 'insuranceType', '') or '')
             cashless_like = {'tpa', 'echs', 'eci', 'fci', 'ayushman bharat', 'northern railways', 'insurance'}
             billing_obj.bill_type = 'CASHLESS' if (
@@ -539,43 +544,7 @@ class PatientViewSet(viewsets.ModelViewSet):
             
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-class ServiceBulkSaveAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, uhid, adm_no):
-        patient = get_object_or_404(Patient, uhid=uhid)
-        admission_obj, _ = Admission.objects.get_or_create(patient=patient, admNo=adm_no)
-        services = request.data.get('services') or []
-
-        if not isinstance(services, list):
-            return Response({'error': 'services must be a list.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            serialized = []
-            with transaction.atomic():
-                admission_obj.services.all().delete()
-                created_services = []
-                for service_data in services:
-                    defaults = resolve_service_defaults(service_data or {}, patient)
-                    created_services.append(Service(
-                        admission=admission_obj,
-                        svcName=defaults['svcName'],
-                        pricing_applied=defaults['pricing_applied'],
-                        svcCat=defaults['svcCat'],
-                        svcQty=defaults['svcQty'],
-                        svcRate=defaults['svcRate'],
-                        svcTot=defaults['svcTot'],
-                        svcDate=defaults['svcDate'],
-                    ))
-                if created_services:
-                    Service.objects.bulk_create(created_services)
-                serialized = ServiceSerializer(admission_obj.services.order_by('svcDate', 'id'), many=True).data
-            return Response({'saved': len(serialized), 'services': serialized}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
-    
     @action(detail=True, methods=['patch'])
     def set_expected_dod(self, request, uhid=None):
         patient = self.get_object()
@@ -662,6 +631,41 @@ class ServiceBulkSaveAPIView(APIView):
         # expose all the prices and totals we hid from the hospital staff!
         serializer = self.get_serializer(cashless_patients, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+class ServiceBulkSaveAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, uhid, adm_no):
+        patient = get_object_or_404(Patient, uhid=uhid)
+        admission_obj, _ = Admission.objects.get_or_create(patient=patient, admNo=adm_no)
+        services = request.data.get('services') or []
+
+        if not isinstance(services, list):
+            return Response({'error': 'services must be a list.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            serialized = []
+            with transaction.atomic():
+                admission_obj.services.all().delete()
+                created_services = []
+                for service_data in services:
+                    defaults = resolve_service_defaults(service_data or {}, patient)
+                    created_services.append(Service(
+                        admission=admission_obj,
+                        svcName=defaults['svcName'],
+                        pricing_applied=defaults['pricing_applied'],
+                        svcCat=defaults['svcCat'],
+                        svcQty=defaults['svcQty'],
+                        svcRate=defaults['svcRate'],
+                        svcTot=defaults['svcTot'],
+                        svcDate=defaults['svcDate'],
+                    ))
+                if created_services:
+                    Service.objects.bulk_create(created_services)
+                serialized = ServiceSerializer(admission_obj.services.order_by('svcDate', 'id'), many=True).data
+            return Response({'saved': len(serialized), 'services': serialized}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
 class ServiceMasterViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ServiceMaster.objects.all()

@@ -224,6 +224,11 @@ class AdmissionSerializer(serializers.ModelSerializer):
         if instance.dateTime:
             local_dt = timezone.localtime(instance.dateTime)
             data['dateTime'] = local_dt.strftime('%Y-%m-%dT%H:%M')
+        
+        # Expose this admission's own bill_type so every dashboard
+        # can read it from the admission object directly instead of patient.payMode
+        billing = instance.bills.order_by('-id').first()
+        data['bill_type'] = billing.bill_type if billing else 'CASH'
         return data
 
 class PatientSerializer(serializers.ModelSerializer):
