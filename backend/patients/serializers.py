@@ -136,7 +136,11 @@ class ServiceSerializer(serializers.ModelSerializer):
         data['total'] = data.get('svcTot')
 
         request = self.context.get('request')
-        if request and getattr(request.user, 'role', '') != 'office_admin':
+        
+        # 🌟 THE FIX: Define exactly who is allowed to see Cashless prices!
+        allowed_roles = ['superadmin', 'office_admin', 'admin', 'receptionist']
+        
+        if request and getattr(request.user, 'role', '') not in allowed_roles:
             if getattr(instance, 'pricing_applied', 'CASH') == 'CASHLESS':
                 # Remove the database fields
                 data.pop('svcRate', None)
