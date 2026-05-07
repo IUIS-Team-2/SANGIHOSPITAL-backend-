@@ -114,17 +114,17 @@ class UserManagementSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Last name cannot contain numbers.")
         return value
 
-def validate_phone_number(self, value):
-    if not value:
-        return value  # optional field
-    digits_only = re.sub(r'\D', '', value)
-    if not value.replace('+', '').replace('-', '').replace(' ', '').isdigit():
-        raise serializers.ValidationError("Phone number can only contain digits, +, - and spaces.")
-    if len(digits_only) < 10:
-        raise serializers.ValidationError("Phone number must be at least 10 digits.")
-    if len(digits_only) > 15:
-        raise serializers.ValidationError("Phone number must be at most 15 digits.")
-    return value
+    def validate_phone_number(self, value):
+        if not value:
+            return value  # optional field
+        digits_only = re.sub(r'\D', '', value)
+        if not value.replace('+', '').replace('-', '').replace(' ', '').isdigit():
+            raise serializers.ValidationError("Phone number can only contain digits, +, - and spaces.")
+        if len(digits_only) < 10:
+            raise serializers.ValidationError("Phone number must be at least 10 digits.")
+        if len(digits_only) > 15:
+            raise serializers.ValidationError("Phone number must be at most 15 digits.")
+        return value
 
     def validate(self, data):
         password = data.get('password')
