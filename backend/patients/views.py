@@ -293,18 +293,13 @@ def normalize_service_pricing(service_data, patient=None):
     return 'CASHLESS' if 'cashless' in pay_mode else 'CASH'
 
 def resolve_service_defaults(service_data, patient=None):
-    svc_name = (
-        service_data.get('svcName')
-        or service_data.get('title')
-        or service_data.get('name')
-        or ''
-    ).strip()
+    svc_name = (service_data.get('svcName') or service_data.get('title') or service_data.get('name') or '').strip()
     if not svc_name:
         raise ValueError('Service name (svcName) is required.')
 
     pricing_applied = normalize_service_pricing(service_data, patient)
     svc_date = service_data.get('svcDate') or service_data.get('date') or None
-
+    
     try:
         svc_qty = int(service_data.get('svcQty') or service_data.get('qty') or 1)
     except (TypeError, ValueError):
@@ -319,9 +314,11 @@ def resolve_service_defaults(service_data, patient=None):
     if master_service:
         svc_rate = master_service.rate
         svc_cat = master_service.category
+        svc_code = master_service.code  # 🌟 NEW: Grab the code from the Excel Master!
     else:
         raw_rate = service_data.get('svcRate') or service_data.get('rate') or 0
         raw_cat = service_data.get('svcCat') or service_data.get('type') or 'GENERAL SERVICES'
+        svc_code = service_data.get('svcCode') or service_data.get('code') or '' # 🌟 NEW: Fallback
         try:
             svc_rate = Decimal(str(raw_rate))
         except (InvalidOperation, ValueError, TypeError):
@@ -330,6 +327,7 @@ def resolve_service_defaults(service_data, patient=None):
 
     return {
         'svcName': svc_name,
+        'svcCode': svc_code, # 🌟 NEW: Return it so the view can save it!
         'pricing_applied': pricing_applied,
         'svcCat': svc_cat,
         'svcQty': svc_qty,
@@ -352,8 +350,7 @@ class PatientViewSet(viewsets.ModelViewSet):
 
         queryset = Patient.objects.all()
 
-        # 🌟 THE TASK FIX: Hide patients that already have active tasks in a specific department
-        # We check if the frontend is asking us to exclude assigned patients
+        # 🌟 THE TASK FIX: Only hides patients if the frontend explicitly asks (for the Assignment Modal)
         exclude_dept = self.request.query_params.get('exclude_active_tasks_for_dept')
         if exclude_dept:
             queryset = queryset.exclude(
@@ -361,22 +358,25 @@ class PatientViewSet(viewsets.ModelViewSet):
                 assigned_tasks__status__in=['Pending', 'In Progress']
             )
 
-        # 1. Super Admin & Office Admin see everything
+        # 1. 🌍 Super Admin & Office Admin: See EVERYTHING across ALL branches
         if user.role in ['superadmin', 'office_admin']:
             return queryset.order_by('-created_at')
-            
-        # 2. Branch Admin AND Receptionists see their branch's patients!
+
+        # 2. 🏥 Branch Admin & Receptionist: See ALL patients for THEIR branch
         elif user.role in ['admin', 'receptionist']:
             return queryset.filter(branch_location=user.branch).order_by('-created_at')
-            
-        # 3. HOD should be able to work on all patients for their branch.
-        # If HOD is configured with branch=ALL, allow cross-branch visibility.
-        elif user.role == 'hod':
-            if getattr(user, 'branch', None) in get_valid_branch_codes():
-                return queryset.filter(branch_location=user.branch).order_by('-created_at')
-            return queryset.order_by('-created_at')
 
-        # 4. Staff only see patients explicitly assigned to them via Task Manager
+        # 3. 👔 HOD: Sees ALL CASHLESS patients (all hospitals) + Tasks assigned to/by them
+        elif user.role == 'hod':
+            from django.db import models
+            return queryset.filter(
+                models.Q(assigned_tasks__assigned_to=user) | 
+                models.Q(assigned_tasks__assigned_by=user) |
+                models.Q(payMode__icontains='cashless') |
+                models.Q(admissions__bills__bill_type='CASHLESS')
+            ).distinct().order_by('-created_at')
+
+        # 4. 👩‍⚕️ Staff (Created by Office Admin/HOD): See ONLY patients explicitly assigned to them
         elif user.role in ['billing', 'opd', 'intimation', 'query', 'uploading', 'nursing', 'notes', 'medical_officer', 'quality_analyst']:
             return queryset.filter(assigned_tasks__assigned_to=user).distinct().order_by('-created_at')
 
@@ -385,6 +385,11 @@ class PatientViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
         admission_type = data.pop('admissionType', None) or request.data.get('admissionType') or 'IPD'
+
+         # If no branch sent, use the logged-in user's branch (not DB first branch)
+        if not data.get('branch_location') and not data.get('locId'):
+            if getattr(request.user, 'branch', None) not in [None, 'ALL']:
+                data['branch_location'] = request.user.branch
         
         if 'locId' in data or 'branch_location' in data:
             data['branch_location'] = resolve_branch_code_from_loc(data.get('locId'), data.get('branch_location'))
@@ -498,7 +503,7 @@ class PatientViewSet(viewsets.ModelViewSet):
                     
                 setattr(billing_obj, key, value)
 
-            pay_mode = str(getattr(patient, 'payMode', '') or billing_data.get('paymentMode') or '')
+            pay_mode = str(billing_data.get('paymentMode') or getattr(billing_obj, 'paymentMode', '') or '')
             insurance_type = str(billing_data.get('insuranceType') or getattr(billing_obj, 'insuranceType', '') or '')
             cashless_like = {'tpa', 'echs', 'eci', 'fci', 'ayushman bharat', 'northern railways', 'insurance'}
             billing_obj.bill_type = 'CASHLESS' if (
@@ -529,6 +534,7 @@ class PatientViewSet(viewsets.ModelViewSet):
                     'svcRate': defaults['svcRate'],
                     'svcTot': defaults['svcTot'],
                     'svcDate': defaults['svcDate'],
+                    'svcCode': defaults['svcCode'],
                 }
             )
             
@@ -540,121 +546,6 @@ class PatientViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=True, methods=['post'])
-    def request_print(self, request, uhid=None):
-        patient = self.get_object()
-        adm_no = (
-            request.data.get('admNo')
-            or request.data.get('adm_no')
-            or request.query_params.get('admNo')
-            or request.query_params.get('adm_no')
-        )
-
-        try:
-            if adm_no in [None, ""]:
-                admission = patient.admissions.order_by('-admNo').first()
-                if not admission:
-                    return Response({'error': 'No admission found for this patient.'}, status=status.HTTP_400_BAD_REQUEST)
-            else:
-                admission = patient.admissions.get(admNo=int(adm_no))
-            billing_obj, _ = get_or_create_current_billing(admission)
-
-            if billing_obj.printStatus == 'APPROVED':
-                return Response({'status': 'Already approved'})
-
-            billing_obj.printStatus = 'PENDING'
-            billing_obj.printRequestedAt = timezone.now()
-            billing_obj.save()
-            return Response({'status': 'Print request sent to Branch Admin', 'admNo': admission.admNo})
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-    @action(detail=True, methods=['post'])
-    def resolve_print(self, request, uhid=None):
-        role = getattr(request.user, 'role', '')
-        if role not in ['superadmin', 'office_admin', 'admin', 'branchadmin']:
-            return Response({'error': 'Only Branch Admin / Super Admin can approve print requests.'}, status=status.HTTP_403_FORBIDDEN)
-
-        patient = self.get_object()
-        adm_no = (
-            request.data.get('admNo')
-            or request.data.get('adm_no')
-            or request.query_params.get('admNo')
-            or request.query_params.get('adm_no')
-        )
-
-        action = request.data.get('action') or request.data.get('status') or request.data.get('backendAction') or 'APPROVED'
-        action = str(action).upper()
-        if action not in {'APPROVED', 'REJECTED', 'PENDING'}:
-            action = 'APPROVED'
-
-        try:
-            if role in ['admin', 'branchadmin'] and getattr(request.user, 'branch', None) and patient.branch_location != request.user.branch:
-                return Response({'error': 'You can only resolve print requests for your own branch.'}, status=status.HTTP_403_FORBIDDEN)
-            if adm_no in [None, ""]:
-                admission = patient.admissions.order_by('-admNo').first()
-                if not admission:
-                    return Response({'error': 'No admission found for this patient.'}, status=status.HTTP_400_BAD_REQUEST)
-            else:
-                admission = patient.admissions.get(admNo=int(adm_no))
-            billing_obj, _ = get_or_create_current_billing(admission)
-            billing_obj.printStatus = action
-            billing_obj.save()
-
-            return Response({'status': f'Print request {action}'})
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-    @action(detail=False, methods=['get'])
-    def pending_prints(self, request):
-        role = getattr(request.user, 'role', '')
-        if role not in ['superadmin', 'office_admin', 'admin', 'branchadmin']:
-            return Response({'error': 'Unauthorized access.'}, status=status.HTTP_403_FORBIDDEN)
-
-        pending_patients = Patient.objects.filter(admissions__bills__printStatus='PENDING')
-        if role in ['admin', 'branchadmin'] and getattr(request.user, 'branch', None):
-            pending_patients = pending_patients.filter(branch_location=request.user.branch)
-        pending_patients = pending_patients.distinct()
-
-        serializer = self.get_serializer(pending_patients, many=True)
-        return Response(serializer.data)
-
-class ServiceBulkSaveAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, uhid, adm_no):
-        patient = get_object_or_404(Patient, uhid=uhid)
-        admission_obj, _ = Admission.objects.get_or_create(patient=patient, admNo=adm_no)
-        services = request.data.get('services') or []
-
-        if not isinstance(services, list):
-            return Response({'error': 'services must be a list.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            serialized = []
-            with transaction.atomic():
-                admission_obj.services.all().delete()
-                created_services = []
-                for service_data in services:
-                    defaults = resolve_service_defaults(service_data or {}, patient)
-                    created_services.append(Service(
-                        admission=admission_obj,
-                        svcName=defaults['svcName'],
-                        pricing_applied=defaults['pricing_applied'],
-                        svcCat=defaults['svcCat'],
-                        svcQty=defaults['svcQty'],
-                        svcRate=defaults['svcRate'],
-                        svcTot=defaults['svcTot'],
-                        svcDate=defaults['svcDate'],
-                    ))
-                if created_services:
-                    Service.objects.bulk_create(created_services)
-                serialized = ServiceSerializer(admission_obj.services.order_by('svcDate', 'id'), many=True).data
-            return Response({'saved': len(serialized), 'services': serialized}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
-    
     @action(detail=True, methods=['patch'])
     def set_expected_dod(self, request, uhid=None):
         patient = self.get_object()
@@ -777,11 +668,53 @@ class ServiceBulkSaveAPIView(APIView):
         # expose all the prices and totals we hid from the hospital staff!
         serializer = self.get_serializer(cashless_patients, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+class ServiceBulkSaveAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, uhid, adm_no):
+        patient = get_object_or_404(Patient, uhid=uhid)
+        admission_obj, _ = Admission.objects.get_or_create(patient=patient, admNo=adm_no)
+        services = request.data.get('services') or []
+
+        if not isinstance(services, list):
+            return Response({'error': 'services must be a list.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            serialized = []
+            with transaction.atomic():
+                admission_obj.services.all().delete()
+                created_services = []
+                for service_data in services:
+                    defaults = resolve_service_defaults(service_data or {}, patient)
+                    created_services.append(Service(
+                        admission=admission_obj,
+                        svcName=defaults['svcName'],
+                        svcCode=defaults['svcCode'],  # 🌟 NEW: Saving the Code!
+                        pricing_applied=defaults['pricing_applied'],
+                        svcCat=defaults['svcCat'],
+                        svcQty=defaults['svcQty'],
+                        svcRate=defaults['svcRate'],
+                        svcTot=defaults['svcTot'],
+                        svcDate=defaults['svcDate'],
+                    ))
+                if created_services:
+                    Service.objects.bulk_create(created_services)
+                serialized = ServiceSerializer(admission_obj.services.order_by('svcDate', 'id'), many=True).data
+            return Response({'saved': len(serialized), 'services': serialized}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
 class ServiceMasterViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = ServiceMaster.objects.all()
     serializer_class = ServiceMasterSerializer
-    pagination_class = None 
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = ServiceMaster.objects.all()
+        pricing = self.request.query_params.get('pricing_type')
+        if pricing:
+            qs = qs.filter(pricing_type=pricing.upper())
+        return qs
 
 
 class HospitalSettingsViewSet(viewsets.ModelViewSet):
@@ -1136,11 +1069,25 @@ class TaskDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
         return get_task_queryset_for_user(self.request.user)
 
     def perform_update(self, serializer):
+        user = self.request.user
+
+        # 🌟 THE BYPASS: If a regular employee is just clicking "Submit"
+        if user.role not in TASK_MANAGER_ROLES:
+            # Security check: Make sure they aren't trying to maliciously re-assign the task
+            if 'assigned_to' in serializer.validated_data or 'department' in serializer.validated_data or 'patient' in serializer.validated_data:
+                raise PermissionDenied("Employees cannot re-assign tasks or change departments.")
+            
+            # If they are just updating status (like "Completed") or adding notes, let it save!
+            serializer.save()
+            return
+
+        # 👔 THE MANAGER CHECK: If an Admin/HOD is editing, run the strict validation
         assigned_to = serializer.validated_data.get('assigned_to', serializer.instance.assigned_to)
         patient = serializer.validated_data.get('patient', serializer.instance.patient)
         department = serializer.validated_data.get('department', serializer.instance.department)
+        
         validate_generic_task_assignment(
-            self.request.user,
+            user,
             assigned_to,
             patient=patient,
             department=department,
