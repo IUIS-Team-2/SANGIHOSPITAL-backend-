@@ -27,6 +27,7 @@ from .views import (
     PrintBillView,
     MedicineMasterImportAPIView,
     AdminDashboardStatsAPIView,
+    PrintAdmissionNoteView, 
 )
 
 router = DefaultRouter()
@@ -70,4 +71,5 @@ urlpatterns = [
     path('tasks/my-tasks/', views.EmployeeMyTasksAPIView.as_view(), name='task-my-tasks'),
     path('patients/<str:uhid>/admissions/<str:adm_no>/bill/print/', PrintBillView.as_view(), name='print-bill'),
     path('admin/dashboard/stats/', AdminDashboardStatsAPIView.as_view(), name='admin-dashboard-stats'),
+    path('patients/<str:uhid>/admissions/<str:adm_no>/admission-note/print/', PrintAdmissionNoteView.as_view(), name='print-admission-note'),
 ]
