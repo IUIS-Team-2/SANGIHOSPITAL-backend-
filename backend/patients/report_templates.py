@@ -3,13 +3,16 @@ from django.utils import timezone
 
 
 REPORT_TEMPLATE_CATALOG = [
+    # ─────────────────────────────────────────────────────────────
+    # 1. Complete Blood Count (CBC)
+    # ─────────────────────────────────────────────────────────────
     {
         "key": "CBC",
-        "name": "Complete Blood Count",
+        "name": "Complete Blood Count (CBC)",
         "report_type": "Haematology",
         "report_category": "HAEMATOLOGY",
         "bill_category": "PATHOLOGY",
-        "aliases": ["CBC", "Complete Blood Count"],
+        "aliases": ["CBC", "Complete Blood Count (CBC)", "Complete Blood Count"],
         "tests": [
             {"name": "HAEMOGLOBIN", "unit": "gm/dl", "refRange": "12–16", "status": "Normal"},
             {"name": "TLC (Total Leucocyte Count)", "unit": "/cumm", "refRange": "4000–11000", "status": "Normal"},
@@ -27,13 +30,16 @@ REPORT_TEMPLATE_CATALOG = [
             {"name": "ESR (Wintrobe)", "unit": "mm", "refRange": "M: 0–10, F: 0–20", "status": "Normal"},
         ],
     },
+    # ─────────────────────────────────────────────────────────────
+    # 2. Kidney Function Test (KFT)
+    # ─────────────────────────────────────────────────────────────
     {
         "key": "KFT",
-        "name": "Kidney Function Test",
+        "name": "Kidney Function Test (KFT)",
         "report_type": "Biochemistry",
         "report_category": "BIOCHEMISTRY",
         "bill_category": "PATHOLOGY",
-        "aliases": ["KFT", "Kidney Function Test"],
+        "aliases": ["KFT", "Kidney Function Test (KFT)", "Kidney Function Test"],
         "tests": [
             {"name": "BLOOD UREA", "unit": "mg/dl", "refRange": "13–45", "status": "Normal"},
             {"name": "SERUM CREATININE", "unit": "mg/dl", "refRange": "0.7–1.4", "status": "Normal"},
@@ -43,13 +49,16 @@ REPORT_TEMPLATE_CATALOG = [
             {"name": "CALCIUM", "unit": "mg/dl", "refRange": "8.2–10.5", "status": "Normal"},
         ],
     },
+    # ─────────────────────────────────────────────────────────────
+    # 3. Liver Function Test (LFT)
+    # ─────────────────────────────────────────────────────────────
     {
         "key": "LFT",
-        "name": "Liver Function Test",
+        "name": "Liver Function Test (LFT)",
         "report_type": "Biochemistry",
         "report_category": "BIOCHEMISTRY",
         "bill_category": "PATHOLOGY",
-        "aliases": ["LFT", "Liver Function Test"],
+        "aliases": ["LFT", "Liver Function Test (LFT)", "Liver Function Test"],
         "tests": [
             {"name": "SERUM BILIRUBIN (TOTAL)", "unit": "mg/dl", "refRange": "0.2–1.3", "status": "Normal"},
             {"name": "CONJUGATED (D BILIRUBIN)", "unit": "mg/dl", "refRange": "0.0–0.3", "status": "Normal"},
@@ -62,6 +71,9 @@ REPORT_TEMPLATE_CATALOG = [
             {"name": "ALKALINE PHOSPHATASE", "unit": "IU/L", "refRange": "20–130", "status": "Normal"},
         ],
     },
+    # ─────────────────────────────────────────────────────────────
+    # 4. Lipid Profile
+    # ─────────────────────────────────────────────────────────────
     {
         "key": "LIPID",
         "name": "Lipid Profile",
@@ -78,6 +90,9 @@ REPORT_TEMPLATE_CATALOG = [
             {"name": "LDL / HDL RATIO", "unit": "", "refRange": "1.5–3.5", "status": "Normal"},
         ],
     },
+    # ─────────────────────────────────────────────────────────────
+    # 5. Blood Gas Analysis
+    # ─────────────────────────────────────────────────────────────
     {
         "key": "BLOODGAS",
         "name": "Blood Gas Analysis",
@@ -101,40 +116,58 @@ REPORT_TEMPLATE_CATALOG = [
             {"name": "HCT", "unit": "mmol/L", "refRange": "38–51", "status": "Normal"},
         ],
     },
-    {
-        "key": "GLUCOSE",
-        "name": "Blood Glucose",
-        "report_type": "Biochemistry",
-        "report_category": "BIOCHEMISTRY",
-        "bill_category": "PATHOLOGY",
-        "aliases": ["Blood Glucose"],
-        "tests": [
-            {"name": "BLOOD GLUCOSE RANDOM", "unit": "mg/dl", "refRange": "100–150", "status": "Normal"},
-            {"name": "BLOOD GLUCOSE FASTING", "unit": "mg/dl", "refRange": "70–110", "status": "Normal"},
-            {"name": "BLOOD GLUCOSE PP", "unit": "mg/dl", "refRange": "<140", "status": "Normal"},
-            {"name": "HbA1c (Glycosylated Haemoglobin)", "unit": "%", "refRange": "4.30–6.40", "status": "Normal"},
-        ],
-    },
+    # ─────────────────────────────────────────────────────────────
+    # 6. CRP (Qualitative)
+    # ─────────────────────────────────────────────────────────────
     {
         "key": "CRP",
-        "name": "CRP / Procalcitonin",
+        "name": "CRP (Qualitative)",
         "report_type": "Biochemistry",
         "report_category": "BIOCHEMISTRY",
         "bill_category": "PATHOLOGY",
-        "aliases": ["CRP / Procalcitonin"],
+        "aliases": ["CRP (Qualitative)", "CRP"],
         "tests": [
             {"name": "CRP (Qualitative)", "unit": "", "refRange": "NON-REACTIVE", "status": "Normal"},
-            {"name": "CRP (Quantitative)", "unit": "mg/L", "refRange": "<6.0", "status": "Normal"},
-            {"name": "SERUM PROCALCITONIN", "unit": "pg/ml", "refRange": "0.0–500", "status": "Normal"},
         ],
     },
+    # ─────────────────────────────────────────────────────────────
+    # 7. Blood Glucose (Random)
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "GLUCOSE_RANDOM",
+        "name": "Blood Glucose (Random)",
+        "report_type": "Biochemistry",
+        "report_category": "BIOCHEMISTRY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Blood Glucose (Random)", "Blood Glucose Random"],
+        "tests": [
+            {"name": "BLOOD GLUCOSE RANDOM", "unit": "mg/dl", "refRange": "100–150", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 8. Blood Glucose (Fasting)
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "GLUCOSE_FASTING",
+        "name": "Blood Glucose (Fasting)",
+        "report_type": "Biochemistry",
+        "report_category": "BIOCHEMISTRY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Blood Glucose (Fasting)", "Blood Glucose Fasting"],
+        "tests": [
+            {"name": "BLOOD GLUCOSE FASTING", "unit": "mg/dl", "refRange": "70–110", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 9. Widal Test (Slide Method)
+    # ─────────────────────────────────────────────────────────────
     {
         "key": "WIDAL",
         "name": "Widal Test (Slide Method)",
         "report_type": "Immunology – Serology",
         "report_category": "IMMUNOLOGY – SEROLOGY",
         "bill_category": "PATHOLOGY",
-        "aliases": ["Widal Test (Slide Method)"],
+        "aliases": ["Widal Test (Slide Method)", "Widal Test"],
         "tests": [
             {"name": "TO (1:20 / 1:40 / 1:80 / 1:160 / 1:320)", "unit": "", "refRange": "Pattern", "status": "Normal"},
             {"name": "TH (1:20 / 1:40 / 1:80 / 1:160 / 1:320)", "unit": "", "refRange": "Pattern", "status": "Normal"},
@@ -144,6 +177,9 @@ REPORT_TEMPLATE_CATALOG = [
         ],
         "remarks": "Interpretation: Antibody titer of 1:80 or higher suggests infection. Clinical correlation advised.",
     },
+    # ─────────────────────────────────────────────────────────────
+    # 10. Malaria Antigen Test
+    # ─────────────────────────────────────────────────────────────
     {
         "key": "MALARIA",
         "name": "Malaria Antigen Test",
@@ -157,53 +193,93 @@ REPORT_TEMPLATE_CATALOG = [
         ],
         "remarks": "Diagnosis should be correlated with smear findings and clinical picture.",
     },
+    # ─────────────────────────────────────────────────────────────
+    # 11. Typhi Dot (IgG & IgM)
+    # ─────────────────────────────────────────────────────────────
     {
         "key": "TYPHIDOT",
         "name": "Typhi Dot (IgG & IgM)",
         "report_type": "Microbiology",
         "report_category": "MICROBIOLOGY",
         "bill_category": "PATHOLOGY",
-        "aliases": ["Typhi Dot (IgG & IgM)"],
+        "aliases": ["Typhi Dot (IgG & IgM)", "Typhi Dot"],
         "tests": [
             {"name": "THYPIDOT TEST FOR S.TYPHI IgM", "unit": "", "refRange": "", "status": "Normal"},
             {"name": "THYPIDOT TEST FOR S.TYPHI IgG", "unit": "", "refRange": "", "status": "Normal"},
         ],
         "remarks": "Clinical correlation is advised.",
     },
+    # ─────────────────────────────────────────────────────────────
+    # 12. Dengue (IgM & IgG)
+    # ─────────────────────────────────────────────────────────────
     {
-        "key": "DENGUE",
-        "name": "Dengue Panel",
+        "key": "DENGUE_IGMG",
+        "name": "Dengue (IgM & IgG)",
         "report_type": "Microbiology",
         "report_category": "MICROBIOLOGY",
         "bill_category": "PATHOLOGY",
-        "aliases": ["Dengue Panel"],
+        "aliases": ["Dengue (IgM & IgG)", "Dengue IgM & IgG"],
         "tests": [
             {"name": "DENGUE IgM ANTIBODIES", "unit": "", "refRange": "NON-REACTIVE", "status": "Normal"},
             {"name": "DENGUE IgG ANTIBODIES", "unit": "", "refRange": "NON-REACTIVE", "status": "Normal"},
-            {"name": "DENGUE NS1 ANTIGEN", "unit": "", "refRange": "NON-REACTIVE", "status": "Normal"},
         ],
+        "remarks": "IgM antibodies appear around 5th day of infection and last 60–90 days. IgG antibodies may be detected for life.",
     },
+    # ─────────────────────────────────────────────────────────────
+    # 13. Dengue NS1 Antigen Test
+    # ─────────────────────────────────────────────────────────────
     {
-        "key": "VIRAL",
-        "name": "Viral Markers",
+        "key": "DENGUE_NS1",
+        "name": "Dengue NS1 Antigen Test",
         "report_type": "Microbiology",
         "report_category": "MICROBIOLOGY",
         "bill_category": "PATHOLOGY",
-        "aliases": ["Viral Markers"],
+        "aliases": ["Dengue NS1 Antigen Test", "Dengue NS1"],
+        "tests": [
+            {"name": "DENGUE NS1 ANTIGEN", "unit": "", "refRange": "NON-REACTIVE", "status": "Normal"},
+        ],
+        "remarks": "NS1 antigen is detectable from day 1 up to 9 days after onset of fever.",
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 14. Viral Markers (HIV, HBsAg, HCV)
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "VIRAL",
+        "name": "Viral Markers (HIV, HBsAg, HCV)",
+        "report_type": "Microbiology",
+        "report_category": "MICROBIOLOGY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Viral Markers (HIV, HBsAg, HCV)", "Viral Markers"],
         "tests": [
             {"name": "HIV I & II", "unit": "", "refRange": "NEGATIVE", "status": "Normal"},
             {"name": "HEPATITIS B (HBsAg)", "unit": "", "refRange": "NEGATIVE", "status": "Normal"},
             {"name": "HCV", "unit": "", "refRange": "NEGATIVE", "status": "Normal"},
-            {"name": "COVID-19 (Ag)", "unit": "", "refRange": "NON-REACTIVE", "status": "Normal"},
         ],
     },
+    # ─────────────────────────────────────────────────────────────
+    # 15. COVID-19 Rapid Antigen
+    # ─────────────────────────────────────────────────────────────
     {
-        "key": "URINE_RM",
-        "name": "Urine Examination (R/M)",
+        "key": "COVID19",
+        "name": "COVID-19 Rapid Antigen",
         "report_type": "Microbiology",
         "report_category": "MICROBIOLOGY",
         "bill_category": "PATHOLOGY",
-        "aliases": ["Urine Examination (R/M)"],
+        "aliases": ["COVID-19 Rapid Antigen", "COVID-19"],
+        "tests": [
+            {"name": "COVID-19 (Ag)", "unit": "", "refRange": "NON-REACTIVE", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 16. Urine Examination (Routine)
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "URINE_RM",
+        "name": "Urine Examination (Routine)",
+        "report_type": "Microbiology",
+        "report_category": "MICROBIOLOGY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Urine Examination (Routine)", "Urine Examination (R/M)", "Urine R/M"],
         "tests": [
             {"name": "COLOUR", "unit": "", "refRange": "", "status": "Normal"},
             {"name": "VOLUME", "unit": "ml", "refRange": "", "status": "Normal"},
@@ -221,35 +297,459 @@ REPORT_TEMPLATE_CATALOG = [
             {"name": "OTHERS", "unit": "", "refRange": "", "status": "Normal"},
         ],
     },
+    # ─────────────────────────────────────────────────────────────
+    # 17. Urine Gram Stain
+    # ─────────────────────────────────────────────────────────────
     {
-        "key": "URINE_CS",
-        "name": "Urine C/S (Culture & Sensitivity)",
+        "key": "URINE_GRAM",
+        "name": "Urine Gram Stain",
         "report_type": "Microbiology",
         "report_category": "MICROBIOLOGY",
         "bill_category": "PATHOLOGY",
-        "aliases": ["Urine C/S (Culture & Sensitivity)"],
+        "aliases": ["Urine Gram Stain"],
         "tests": [
-            {"name": "SPECIMEN SOURCE", "unit": "", "refRange": "URINE C/S", "status": "Normal"},
+            {"name": "SPECIMEN SOURCE", "unit": "", "refRange": "URINE", "status": "Normal"},
+            {"name": "GRAM STAIN RESULT", "unit": "", "refRange": "", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 18. Aerobic Culture & Sensitivity
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "CULTURE_CS",
+        "name": "Aerobic Culture & Sensitivity",
+        "report_type": "Microbiology",
+        "report_category": "MICROBIOLOGY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Aerobic Culture & Sensitivity", "Culture & Sensitivity", "C/S"],
+        "tests": [
+            {"name": "SPECIMEN SOURCE", "unit": "", "refRange": "", "status": "Normal"},
             {"name": "DATE RECEIVED", "unit": "", "refRange": "", "status": "Normal"},
             {"name": "DATE REPORTED", "unit": "", "refRange": "", "status": "Normal"},
             {"name": "CULTURE RESULT", "unit": "", "refRange": "", "status": "Normal"},
             {"name": "ANTIBIOTIC SENSITIVITY", "unit": "", "refRange": "Sensitive / Resistant", "status": "Normal"},
         ],
     },
+    # ─────────────────────────────────────────────────────────────
+    # 19. Serum Procalcitonin
+    # ─────────────────────────────────────────────────────────────
     {
-        "key": "BLOOD_CS",
-        "name": "Blood C/S (Culture & Sensitivity)",
+        "key": "PROCALCITONIN",
+        "name": "Serum Procalcitonin",
+        "report_type": "Biochemistry",
+        "report_category": "BIOCHEMISTRY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Serum Procalcitonin", "Procalcitonin"],
+        "tests": [
+            {"name": "SERUM PROCALCITONIN", "unit": "pg/ml", "refRange": "0.0–500", "status": "Normal"},
+        ],
+        "remarks": (
+            "< 500 pg/ml: Severe systemic infection not likely. "
+            "500–2000: Systemic infection possible. "
+            "2000–10000: Sepsis likely. "
+            "> 10000: Severe sepsis / septic shock almost certain."
+        ),
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 20. Sputum for AFB
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "SPUTUM_AFB",
+        "name": "Sputum for AFB",
         "report_type": "Microbiology",
         "report_category": "MICROBIOLOGY",
         "bill_category": "PATHOLOGY",
-        "aliases": ["Blood C/S (Culture & Sensitivity)"],
+        "aliases": ["Sputum for AFB", "Sputum AFB"],
         "tests": [
-            {"name": "SPECIMEN SOURCE", "unit": "", "refRange": "BLOOD C/S", "status": "Normal"},
-            {"name": "DATE RECEIVED", "unit": "", "refRange": "", "status": "Normal"},
-            {"name": "DATE REPORTED", "unit": "", "refRange": "", "status": "Normal"},
-            {"name": "CULTURE RESULT", "unit": "", "refRange": "", "status": "Normal"},
+            {"name": "SPUTUM FOR AFB", "unit": "", "refRange": "NO ACID FAST BACILLI SEEN", "status": "Normal"},
         ],
     },
+    # ─────────────────────────────────────────────────────────────
+    # 21. Sputum Gram Stain
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "SPUTUM_GRAM",
+        "name": "Sputum Gram Stain",
+        "report_type": "Microbiology",
+        "report_category": "MICROBIOLOGY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Sputum Gram Stain"],
+        "tests": [
+            {"name": "SPUTUM GRAM STAIN RESULT", "unit": "", "refRange": "", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 22. Cardiac Markers (Trop-T, Trop-I, CPK)
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "CARDIAC",
+        "name": "Cardiac Markers (Trop-T, Trop-I, CPK)",
+        "report_type": "Biochemistry",
+        "report_category": "BIOCHEMISTRY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Cardiac Markers (Trop-T, Trop-I, CPK)", "Cardiac Markers"],
+        "tests": [
+            {"name": "TROPONIN-T", "unit": "", "refRange": "NEGATIVE", "status": "Normal"},
+            {"name": "TROPONIN-I", "unit": "", "refRange": "NEGATIVE", "status": "Normal"},
+            {"name": "CPK-MB", "unit": "IU/L", "refRange": "Upto 24", "status": "Normal"},
+            {"name": "CPK", "unit": "U/L", "refRange": "22–198", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 23. Total Thyroid Profile
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "THYROID",
+        "name": "Total Thyroid Profile",
+        "report_type": "Biochemistry",
+        "report_category": "BIOCHEMISTRY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Total Thyroid Profile", "Thyroid Profile"],
+        "tests": [
+            {"name": "T3 (Triiodothyronine)", "unit": "pmol/L", "refRange": "0.9–2.5", "status": "Normal"},
+            {"name": "Free Thyroxine (FT4)", "unit": "pmol/L", "refRange": "60–135", "status": "Normal"},
+            {"name": "Thyroid Stimulating Hormone (TSH)", "unit": "pmol/L", "refRange": "0.25–5.0", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 24. Vitamin B-12 (Cyanocobalamin)
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "VIT_B12",
+        "name": "Vitamin B-12 (Cyanocobalamin)",
+        "report_type": "Biochemistry",
+        "report_category": "BIOCHEMISTRY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Vitamin B-12 (Cyanocobalamin)", "Vitamin B12", "Vitamin B-12"],
+        "tests": [
+            {"name": "VITAMIN B-12 (CYANOCOBALAMIN)", "unit": "pg/ml", "refRange": "211–911", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 25. 25 OH Vitamin D3
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "VIT_D3",
+        "name": "25 OH Vitamin D3",
+        "report_type": "Biochemistry",
+        "report_category": "BIOCHEMISTRY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["25 OH Vitamin D3", "Vitamin D3", "Vitamin D"],
+        "tests": [
+            {"name": "25 OH VITAMIN D3", "unit": "ng/ml", "refRange": "30–100", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 26. Stool Examination
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "STOOL",
+        "name": "Stool Examination",
+        "report_type": "Microbiology",
+        "report_category": "MICROBIOLOGY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Stool Examination", "Stool R/M"],
+        "tests": [
+            {"name": "COLOUR", "unit": "", "refRange": "", "status": "Normal"},
+            {"name": "CONSISTANCY", "unit": "", "refRange": "", "status": "Normal"},
+            {"name": "MUCOUS", "unit": "", "refRange": "NIL", "status": "Normal"},
+            {"name": "PH", "unit": "", "refRange": "7.0–7.8", "status": "Normal"},
+            {"name": "REACTION", "unit": "", "refRange": "ACIDIC / ALKALINE", "status": "Normal"},
+            {"name": "PUS CELLS", "unit": "/HPF", "refRange": "0–1", "status": "Normal"},
+            {"name": "RED BLOOD CELLS", "unit": "/HPF", "refRange": "NIL", "status": "Normal"},
+            {"name": "OVA", "unit": "", "refRange": "NIL", "status": "Normal"},
+            {"name": "CYST", "unit": "", "refRange": "NIL", "status": "Normal"},
+            {"name": "BACTERIA", "unit": "", "refRange": "NIL", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 27. Blood Group & Rh Factor
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "BLOOD_GROUP",
+        "name": "Blood Group & Rh Factor",
+        "report_type": "Haematology",
+        "report_category": "HAEMATOLOGY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Blood Group & Rh Factor", "Blood Group"],
+        "tests": [
+            {"name": "BLOOD GROUP", "unit": "", "refRange": "", "status": "Normal"},
+            {"name": "Rh FACTOR", "unit": "", "refRange": "", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 28. HbA1c (Glycosylated Hemoglobin)
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "HBA1C",
+        "name": "HbA1c (Glycosylated Hemoglobin)",
+        "report_type": "Biochemistry",
+        "report_category": "BIOCHEMISTRY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["HbA1c (Glycosylated Hemoglobin)", "HbA1c", "Glycosylated Haemoglobin"],
+        "tests": [
+            {"name": "HbA1c (GLYCOSYLATED HEMOGLOBIN)", "unit": "%", "refRange": "4.30–6.40", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 29. Urine Ketone
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "URINE_KETONE",
+        "name": "Urine Ketone",
+        "report_type": "Biochemistry",
+        "report_category": "BIOCHEMISTRY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Urine Ketone"],
+        "tests": [
+            {"name": "URINE KETONE", "unit": "", "refRange": "NEGATIVE", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 30. D-Dimer
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "DDIMER",
+        "name": "D-Dimer",
+        "report_type": "Haematology",
+        "report_category": "HAEMATOLOGY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["D-Dimer"],
+        "tests": [
+            {"name": "D-DIMER", "unit": "µgFEU/mL", "refRange": "<0.5", "status": "Normal"},
+        ],
+        "remarks": (
+            "D-dimer is elevated whenever the coagulation system has been activated. "
+            "A negative test essentially rules out thrombosis. A positive test requires further workup."
+        ),
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 31. Serum Amylase & Lipase
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "AMYLASE_LIPASE",
+        "name": "Serum Amylase & Lipase",
+        "report_type": "Biochemistry",
+        "report_category": "BIOCHEMISTRY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Serum Amylase & Lipase", "Amylase & Lipase"],
+        "tests": [
+            {"name": "S. AMYLASE", "unit": "U/L", "refRange": "30.0–220.0", "status": "Normal"},
+            {"name": "S. LIPASE", "unit": "U/L", "refRange": "Upto 190.0", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 32. Homocysteine (Quantitative)
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "HOMOCYSTEINE",
+        "name": "Homocysteine (Quantitative)",
+        "report_type": "Biochemistry",
+        "report_category": "BIOCHEMISTRY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Homocysteine (Quantitative)", "Homocysteine"],
+        "tests": [
+            {"name": "HOMOCYSTEINE", "unit": "umol/L", "refRange": "5.45–16.20", "status": "Normal"},
+        ],
+        "remarks": "CVD patients with homocysteine > 15 umol/L belong to a high risk group.",
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 33. PSA (Prostate Specific Antigen)
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "PSA",
+        "name": "PSA (Prostate Specific Antigen)",
+        "report_type": "Biochemistry",
+        "report_category": "BIOCHEMISTRY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["PSA (Prostate Specific Antigen)", "PSA"],
+        "tests": [
+            {"name": "PSA TOTAL, SERUM", "unit": "ng/mL", "refRange": "<4.00", "status": "Normal"},
+        ],
+        "remarks": "PSA values should be correlated with clinical findings and other investigations.",
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 34. Prothrombin Time (PT)
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "PT",
+        "name": "Prothrombin Time (PT)",
+        "report_type": "Haematology",
+        "report_category": "HAEMATOLOGY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Prothrombin Time (PT)", "PT", "Prothrombin Time"],
+        "tests": [
+            {"name": "PATIENT TIME (PT)", "unit": "Sec", "refRange": "10.0–14.0", "status": "Normal"},
+            {"name": "CONTROL TIME (PT)", "unit": "Sec", "refRange": "", "status": "Normal"},
+            {"name": "INR (International Normalized Ratio)", "unit": "", "refRange": "0.8–1.2", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 35. Activated Partial Thromboplastin Time (APTT)
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "APTT",
+        "name": "Activated Partial Thromboplastin Time (APTT)",
+        "report_type": "Haematology",
+        "report_category": "HAEMATOLOGY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Activated Partial Thromboplastin Time (APTT)", "APTT"],
+        "tests": [
+            {"name": "PATIENT TIME (APTT)", "unit": "Sec", "refRange": "26.0–40.0", "status": "Normal"},
+            {"name": "CONTROL TIME (APTT)", "unit": "Sec", "refRange": "", "status": "Normal"},
+            {"name": "RATIO (APTT)", "unit": "", "refRange": "", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 36. Adenosine Deaminase (ADA)
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "ADA",
+        "name": "Adenosine Deaminase (ADA)",
+        "report_type": "Biochemistry",
+        "report_category": "BIOCHEMISTRY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Adenosine Deaminase (ADA)", "ADA"],
+        "tests": [
+            {"name": "ADENOSINE DEAMINASE (ADA)", "unit": "U/L", "refRange": "Normal <30", "status": "Normal"},
+        ],
+        "remarks": (
+            "Normal <30 U/L | Suspect: 30–40 U/L | Strong Suspect: 41–60 U/L | Positive >60 U/L. "
+            "Increased ADA is found in Tuberculosis and various other infections. "
+            "Result should be read in adjunct with clinical findings."
+        ),
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 37. Body Fluid For Cytology
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "BODY_FLUID_CYTO",
+        "name": "Body Fluid For Cytology",
+        "report_type": "Microbiology",
+        "report_category": "MICROBIOLOGY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Body Fluid For Cytology", "Body Fluid Cytology"],
+        "tests": [
+            {"name": "SPECIMEN TYPE", "unit": "", "refRange": "", "status": "Normal"},
+            {"name": "CLINICAL NOTE", "unit": "", "refRange": "", "status": "Normal"},
+            {"name": "MICROSCOPIC EXAMINATION", "unit": "", "refRange": "", "status": "Normal"},
+            {"name": "IMPRESSION", "unit": "", "refRange": "", "status": "Normal"},
+            {"name": "ADVICE", "unit": "", "refRange": "", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 38. Body Fluid Routine Analysis
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "BODY_FLUID_ROUTINE",
+        "name": "Body Fluid Routine Analysis",
+        "report_type": "Microbiology",
+        "report_category": "MICROBIOLOGY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Body Fluid Routine Analysis", "Body Fluid Routine"],
+        "tests": [
+            {"name": "SAMPLE TYPE", "unit": "", "refRange": "", "status": "Normal"},
+            {"name": "VOLUME", "unit": "mL", "refRange": ">1.5 mL", "status": "Normal"},
+            {"name": "COLOUR", "unit": "", "refRange": "", "status": "Normal"},
+            {"name": "APPEARANCE", "unit": "", "refRange": "", "status": "Normal"},
+            {"name": "COAGULUM", "unit": "", "refRange": "", "status": "Normal"},
+            {"name": "BLOOD", "unit": "", "refRange": "NEGATIVE", "status": "Normal"},
+            {"name": "GLUCOSE", "unit": "mg/dL", "refRange": "", "status": "Normal"},
+            {"name": "TOTAL PROTEIN", "unit": "gm/dL", "refRange": "", "status": "Normal"},
+            {"name": "TLC, BODY FLUID", "unit": "/cumm", "refRange": "", "status": "Normal"},
+            {"name": "DLC – NEUTROPHIL", "unit": "%", "refRange": "", "status": "Normal"},
+            {"name": "DLC – LYMPHOCYTE", "unit": "%", "refRange": "", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 39. SAAG (Serum Ascites Albumin Gradient)
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "SAAG",
+        "name": "SAAG (Serum Ascites Albumin Gradient)",
+        "report_type": "Biochemistry",
+        "report_category": "BIOCHEMISTRY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["SAAG (Serum Ascites Albumin Gradient)", "SAAG"],
+        "tests": [
+            {"name": "ALBUMIN, SERUM", "unit": "gm/dL", "refRange": "3.50–5.50", "status": "Normal"},
+            {"name": "ALBUMIN, FLUID", "unit": "gm/dL", "refRange": "", "status": "Normal"},
+            {"name": "SAAG", "unit": "gm/dL", "refRange": "", "status": "Normal"},
+        ],
+        "remarks": "SAAG >= 1.1 g/dL indicates portal hypertension.",
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 40. Iron Profile
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "IRON_PROFILE",
+        "name": "Iron Profile",
+        "report_type": "Biochemistry",
+        "report_category": "BIOCHEMISTRY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Iron Profile"],
+        "tests": [
+            {"name": "IRON, SERUM", "unit": "µg/dL", "refRange": "49–181", "status": "Normal"},
+            {"name": "TIBC", "unit": "µg/dL", "refRange": "261–462", "status": "Normal"},
+            {"name": "UNSATURATED IRON BINDING CAPACITY", "unit": "µg/dL", "refRange": "110.0–370.0", "status": "Normal"},
+            {"name": "TRANSFERRIN SATURATION", "unit": "%", "refRange": "14–50", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 41. Blood Picture (Peripheral Smear)
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "PERIPHERAL_SMEAR",
+        "name": "Blood Picture (Peripheral Smear)",
+        "report_type": "Haematology",
+        "report_category": "HAEMATOLOGY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Blood Picture (Peripheral Smear)", "Peripheral Smear"],
+        "tests": [
+            {"name": "RED CELL MORPHOLOGY", "unit": "", "refRange": "", "status": "Normal"},
+            {"name": "WBC MORPHOLOGY", "unit": "", "refRange": "", "status": "Normal"},
+            {"name": "PLATELET ASSESSMENT", "unit": "", "refRange": "", "status": "Normal"},
+            {"name": "HAEMOPARASITES", "unit": "", "refRange": "NONE SEEN", "status": "Normal"},
+            {"name": "IMPRESSION", "unit": "", "refRange": "", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 42. Anti-TPO (Thyroid Peroxidase Antibody)
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "ANTI_TPO",
+        "name": "Anti-TPO (Thyroid Peroxidase Antibody)",
+        "report_type": "Immunology – Serology",
+        "report_category": "IMMUNOLOGY – SEROLOGY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Anti-TPO (Thyroid Peroxidase Antibody)", "Anti-TPO"],
+        "tests": [
+            {"name": "Anti-TPO (Thyroid Peroxidase Antibody)", "unit": "", "refRange": "<0.9 Not Detected", "status": "Normal"},
+        ],
+        "remarks": (
+            "<0.9: Not Detected | 0.9–1.1: Borderline | >1.1: Positive. "
+            "Anti-TPO antibodies are indicative of Hashimoto's thyroiditis if present. "
+            "Method: ELISA."
+        ),
+    },
+    # ─────────────────────────────────────────────────────────────
+    # 43. Bleeding Time (BT) & Clotting Time (CT)
+    # ─────────────────────────────────────────────────────────────
+    {
+        "key": "BT_CT",
+        "name": "Bleeding Time (BT) & Clotting Time (CT)",
+        "report_type": "Haematology",
+        "report_category": "HAEMATOLOGY",
+        "bill_category": "PATHOLOGY",
+        "aliases": ["Bleeding Time (BT) & Clotting Time (CT)", "BT & CT", "BT CT"],
+        "tests": [
+            {"name": "BT (Bleeding Time)", "unit": "Min/Sec", "refRange": "02–07", "status": "Normal"},
+            {"name": "CT (Clotting Time)", "unit": "Min/Sec", "refRange": "04–09", "status": "Normal"},
+        ],
+    },
+    # ─────────────────────────────────────────────────────────────
+    # Radiology (generic – unchanged)
+    # ─────────────────────────────────────────────────────────────
     {
         "key": "RAD_GENERIC",
         "name": "Radiology Report",

@@ -123,12 +123,15 @@ class DischargeSerializer(serializers.ModelSerializer):
 class ServiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Service
-        fields = ['id', 'svcName', 'svcCat', 'svcDate', 'svcQty', 'svcRate', 'svcTot']
+        
+        fields = ['id', 'svcName', 'svcCode', 'svcCat', 'svcDate', 'svcQty', 'svcRate', 'svcTot']
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
         
-        # Custom mappings for the frontend
+        # 🌟 NEW: Map the database code to the frontend's 'code' variable
+        data['code'] = data.get('svcCode')
+        
         data['title'] = data.get('svcName')
         data['type'] = data.get('svcCat')
         data['rate'] = data.get('svcRate')
@@ -136,13 +139,10 @@ class ServiceSerializer(serializers.ModelSerializer):
         data['total'] = data.get('svcTot')
 
         request = self.context.get('request')
-        
-        # 🌟 STRICT BUSINESS FLOW: ONLY Central Roles can see Cashless Money
         allowed_roles = ['superadmin', 'office_admin']
         
         if request and getattr(request.user, 'role', '') not in allowed_roles:
             if getattr(instance, 'pricing_applied', 'CASH') == 'CASHLESS':
-                # Remove all financial data for Branch Admins & Receptionists
                 data.pop('svcRate', None)
                 data.pop('svcTot', None)
                 data.pop('rate', None)

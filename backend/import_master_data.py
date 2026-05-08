@@ -65,28 +65,59 @@ def import_data():
     print("\n--- Populating Lab Reports ---")
     ReportMaster.objects.all().delete()
     
+    # NOTE: These names MUST exactly match the "name" field of the corresponding
+    # template in report_templates.py so the frontend dropdown and template
+    # lookup (get_template_by_label) stay in sync.
     reports_list = [
-        "Complete Blood Count (CBC)", "Kidney Function Test (KFT)", "Liver Function Test (LFT)", 
-        "Lipid Profile", "Blood Gas Analysis", "CRP (Qualitative)", "Blood Glucose (Random)", 
-        "Blood Glucose (Fasting)", "Widal Test (Slide Method)", "Malaria Antigen Test", 
-        "Typhi Dot (IgG & IgM)", "Dengue (IgM & IgG)", "Dengue NS1 Antigen Test", 
-        "Viral Markers (HIV, HBsAg, HCV)", "COVID-19 Rapid Antigen", "Urine Examination (Routine)", 
-        "Urine Gram Stain", "Aerobic Culture & Sensitivity", "Serum Procalcitonin", 
-        "Sputum for AFB", "Sputum Gram Stain", "Cardiac Markers (Trop-T, Trop-I, CPK)", 
-        "Total Thyroid Profile", "Vitamin B-12 (Cyanocobalamin)", "25 OH Vitamin D3", 
-        "Stool Examination", "Blood Group & Rh Factor", "HbA1c (Glycosylated Hemoglobin)", 
-        "Urine Ketone", "D-Dimer", "Serum Amylase & Lipase", "Homocysteine (Quantitative)", 
-        "PSA (Prostate Specific Antigen)", "Prothrombin Time (PT)", 
-        "Activated Partial Thromboplastin Time (APTT)", "Adenosine Deaminase (ADA)", 
-        "Body Fluid For Cytology", "Body Fluid Routine Analysis", 
-        "SAAG (Serum Ascites Albumin Gradient)", "Iron Profile", "Blood Picture (Peripheral Smear)", 
-        "Anti-TPO (Thyroid Peroxidase Antibody)", "Bleeding Time (BT) & Clotting Time (CT)"
+        "Complete Blood Count (CBC)",
+        "Kidney Function Test (KFT)",
+        "Liver Function Test (LFT)",
+        "Lipid Profile",
+        "Blood Gas Analysis",
+        "CRP (Qualitative)",
+        "Blood Glucose (Random)",
+        "Blood Glucose (Fasting)",
+        "Widal Test (Slide Method)",
+        "Malaria Antigen Test",
+        "Typhi Dot (IgG & IgM)",
+        "Dengue (IgM & IgG)",
+        "Dengue NS1 Antigen Test",
+        "Viral Markers (HIV, HBsAg, HCV)",
+        "COVID-19 Rapid Antigen",
+        "Urine Examination (Routine)",
+        "Urine Gram Stain",
+        "Aerobic Culture & Sensitivity",
+        "Serum Procalcitonin",
+        "Sputum for AFB",
+        "Sputum Gram Stain",
+        "Cardiac Markers (Trop-T, Trop-I, CPK)",
+        "Total Thyroid Profile",
+        "Vitamin B-12 (Cyanocobalamin)",
+        "25 OH Vitamin D3",
+        "Stool Examination",
+        "Blood Group & Rh Factor",
+        "HbA1c (Glycosylated Hemoglobin)",
+        "Urine Ketone",
+        "D-Dimer",
+        "Serum Amylase & Lipase",
+        "Homocysteine (Quantitative)",
+        "PSA (Prostate Specific Antigen)",
+        "Prothrombin Time (PT)",
+        "Activated Partial Thromboplastin Time (APTT)",
+        "Adenosine Deaminase (ADA)",
+        "Body Fluid For Cytology",
+        "Body Fluid Routine Analysis",
+        "SAAG (Serum Ascites Albumin Gradient)",
+        "Iron Profile",
+        "Blood Picture (Peripheral Smear)",
+        "Anti-TPO (Thyroid Peroxidase Antibody)",
+        "Bleeding Time (BT) & Clotting Time (CT)",
     ]
     
     for report_name in reports_list:
         ReportMaster.objects.create(name=report_name)
     
-    print("✅ Reports ready.")
+    print(f"✅ {len(reports_list)} reports ready.")
 
 if __name__ == '__main__':
     import_data()

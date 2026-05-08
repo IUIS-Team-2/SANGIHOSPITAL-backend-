@@ -181,6 +181,7 @@ class Service(models.Model):
     admission = models.ForeignKey('Admission', related_name='services', on_delete=models.CASCADE)
     pricing_applied = models.CharField(max_length=10, default='CASH')
     svcName = models.CharField(max_length=200)
+    svcCode = models.CharField(max_length=50, blank=True, default='')
     svcCat = models.CharField(max_length=100, blank=True)
     svcDate = models.DateField(null=True, blank=True)
     svcQty = models.PositiveIntegerField(default=1)

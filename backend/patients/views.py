@@ -293,18 +293,13 @@ def normalize_service_pricing(service_data, patient=None):
     return 'CASHLESS' if 'cashless' in pay_mode else 'CASH'
 
 def resolve_service_defaults(service_data, patient=None):
-    svc_name = (
-        service_data.get('svcName')
-        or service_data.get('title')
-        or service_data.get('name')
-        or ''
-    ).strip()
+    svc_name = (service_data.get('svcName') or service_data.get('title') or service_data.get('name') or '').strip()
     if not svc_name:
         raise ValueError('Service name (svcName) is required.')
 
     pricing_applied = normalize_service_pricing(service_data, patient)
     svc_date = service_data.get('svcDate') or service_data.get('date') or None
-
+    
     try:
         svc_qty = int(service_data.get('svcQty') or service_data.get('qty') or 1)
     except (TypeError, ValueError):
@@ -319,9 +314,11 @@ def resolve_service_defaults(service_data, patient=None):
     if master_service:
         svc_rate = master_service.rate
         svc_cat = master_service.category
+        svc_code = master_service.code  # 🌟 NEW: Grab the code from the Excel Master!
     else:
         raw_rate = service_data.get('svcRate') or service_data.get('rate') or 0
         raw_cat = service_data.get('svcCat') or service_data.get('type') or 'GENERAL SERVICES'
+        svc_code = service_data.get('svcCode') or service_data.get('code') or '' # 🌟 NEW: Fallback
         try:
             svc_rate = Decimal(str(raw_rate))
         except (InvalidOperation, ValueError, TypeError):
@@ -330,6 +327,7 @@ def resolve_service_defaults(service_data, patient=None):
 
     return {
         'svcName': svc_name,
+        'svcCode': svc_code, # 🌟 NEW: Return it so the view can save it!
         'pricing_applied': pricing_applied,
         'svcCat': svc_cat,
         'svcQty': svc_qty,
@@ -536,6 +534,7 @@ class PatientViewSet(viewsets.ModelViewSet):
                     'svcRate': defaults['svcRate'],
                     'svcTot': defaults['svcTot'],
                     'svcDate': defaults['svcDate'],
+                    'svcCode': defaults['svcCode'],
                 }
             )
             
@@ -655,6 +654,7 @@ class ServiceBulkSaveAPIView(APIView):
                     created_services.append(Service(
                         admission=admission_obj,
                         svcName=defaults['svcName'],
+                        svcCode=defaults['svcCode'],  # 🌟 NEW: Saving the Code!
                         pricing_applied=defaults['pricing_applied'],
                         svcCat=defaults['svcCat'],
                         svcQty=defaults['svcQty'],
@@ -670,9 +670,15 @@ class ServiceBulkSaveAPIView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
 class ServiceMasterViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = ServiceMaster.objects.all()
     serializer_class = ServiceMasterSerializer
-    pagination_class = None 
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = ServiceMaster.objects.all()
+        pricing = self.request.query_params.get('pricing_type')
+        if pricing:
+            qs = qs.filter(pricing_type=pricing.upper())
+        return qs
 
 
 class HospitalSettingsViewSet(viewsets.ModelViewSet):
