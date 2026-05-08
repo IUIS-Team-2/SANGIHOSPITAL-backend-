@@ -1698,6 +1698,128 @@ class PharmacyRecordBulkSaveAPIView(APIView):
         ).data
         return Response(payload, status=status.HTTP_200_OK)
 
+
+class CanonicalRecordsAPIView(APIView):
+    """Merge every receptionist-saved report and medicine name from any source
+    (lab_reports/pharmacy_records, services, medicalHistory.investigations/
+    currentMedications) into a single deduplicated payload per admission so
+    Branch Admin can render the full picture regardless of where the data
+    originally landed."""
+    permission_classes = [IsAuthenticated]
+
+    def _split_text(self, raw):
+        if not raw:
+            return []
+        parts = []
+        # Split on common delimiters - newline, comma, semicolon, pipe.
+        for chunk in str(raw).replace('\r', '\n').split('\n'):
+            for piece in chunk.replace('|', ',').replace(';', ',').split(','):
+                cleaned = piece.strip()
+                if cleaned:
+                    parts.append(cleaned)
+        return parts
+
+    def _format_date(self, value):
+        if not value:
+            return ''
+        try:
+            return value.strftime('%Y-%m-%d')
+        except AttributeError:
+            return str(value)[:10]
+
+    def _add(self, bucket, seen, name, source, date_str):
+        if not name:
+            return
+        cleaned = str(name).strip()
+        if not cleaned:
+            return
+        key = cleaned.casefold()
+        if key in seen:
+            return
+        seen.add(key)
+        bucket.append({
+            "name": cleaned,
+            "source": source,
+            "date": date_str or '',
+        })
+
+    def get(self, request, uhid, adm_no):
+        admission = get_object_or_404(
+            Admission.objects.select_related('patient', 'medicalHistory', 'discharge'),
+            patient__uhid=uhid,
+            admNo=adm_no,
+        )
+
+        admission_date_str = self._format_date(admission.dateTime) or ''
+
+        medicine_master_names = {
+            str(name).strip().casefold()
+            for name in MedicineMaster.objects.values_list('name', flat=True)
+            if name
+        }
+
+        report_results = []
+        report_seen = set()
+
+        medicine_results = []
+        medicine_seen = set()
+
+        # 1. Lab reports (most authoritative)
+        for lab in admission.lab_reports.all().order_by('id'):
+            self._add(
+                report_results,
+                report_seen,
+                lab.report_name,
+                'lab_report',
+                self._format_date(lab.report_date) or admission_date_str,
+            )
+
+        # 2. Pharmacy records (most authoritative for medicines)
+        for pharm in admission.pharmacy_records.all().order_by('id'):
+            self._add(
+                medicine_results,
+                medicine_seen,
+                pharm.medicine_name,
+                'pharmacy_record',
+                pharm.date_given or admission_date_str,
+            )
+
+        # 3. Services - classify into reports vs medicines.
+        services = admission.services.all().order_by('id')
+        for svc in services:
+            name = (svc.svcName or '').strip()
+            if not name:
+                continue
+            cat_lower = (svc.svcCat or '').lower()
+            svc_date_str = self._format_date(svc.svcDate) or admission_date_str
+            is_room_or_consultant = 'room' in cat_lower or 'consultant' in cat_lower or 'icu' in cat_lower
+            if is_room_or_consultant:
+                continue
+            is_medicine_cat = any(key in cat_lower for key in (
+                'med', 'pharma', 'drug', 'pharmacy', 'tablet',
+                'injection', 'iv fluid', 'consumable',
+            ))
+            is_medicine_master = name.casefold() in medicine_master_names
+            if is_medicine_cat or is_medicine_master:
+                self._add(medicine_results, medicine_seen, name, 'service', svc_date_str)
+            else:
+                self._add(report_results, report_seen, name, 'service', svc_date_str)
+
+        # 4. MedicalHistory free-text fields (least authoritative).
+        medical = getattr(admission, 'medicalHistory', None)
+        if medical is not None:
+            for token in self._split_text(getattr(medical, 'investigations', '')):
+                self._add(report_results, report_seen, token, 'investigations', admission_date_str)
+            current_meds_raw = getattr(medical, 'currentMedications', '') or getattr(medical, 'treatmentAdvised', '')
+            for token in self._split_text(current_meds_raw):
+                self._add(medicine_results, medicine_seen, token, 'current_medications', admission_date_str)
+
+        return Response({
+            "reports": report_results,
+            "medicines": medicine_results,
+        }, status=status.HTTP_200_OK)
+
+
 class TaskEligibleEmployeesAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
