@@ -11,7 +11,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "sangi_hospital.settings")
 django.setup()
 
 from users.models import CustomUser  # noqa: E402
-from patients.models import HospitalSettings  # noqa: E402
+from patients.models import Doctor, HospitalSettings  # noqa: E402
 
 
 DEFAULTS = {
@@ -53,6 +53,23 @@ def main():
 
     for payload in defaults:
         HospitalSettings.objects.update_or_create(branch=payload["branch"], defaults=payload)
+
+    doctor_defaults = [
+        ("Dr. Priya Sharma", "MBBS, MD - General Medicine"),
+        ("Dr. Rajesh Kumar", "MBBS, MS - General Surgery"),
+        ("Dr. Anita Singh", "MBBS, DNB - Orthopaedics"),
+        ("Dr. Suresh Verma", "MBBS, MD - Cardiology"),
+        ("Dr. Meena Agarwal", "MBBS, MD - Gynaecology"),
+        ("Dr. Deepak Rawat", "MBBS, DNB - Urology"),
+        ("Dr. Kavita Joshi", "MBBS, MD - Paediatrics"),
+        ("Dr. Amit Bhatnagar", "MBBS, MS - ENT"),
+        ("Dr. Ritu Kapoor", "MBBS, MD - Dermatology"),
+        ("Dr. Sanjay Yadav", "MBBS, MD - Neurology"),
+        ("Dr. Neha Gupta", "MBBS, MD - Pulmonology"),
+        ("Dr. Vikas Sharma", "MBBS, MS - Ophthalmology"),
+    ]
+    for name, qualification in doctor_defaults:
+        Doctor.objects.update_or_create(name=name, defaults={"qualification": qualification})
 
     username = DEFAULTS["username"]
     password = DEFAULTS["password"]
@@ -107,6 +124,7 @@ def main():
     print(f"Email    : {DEFAULTS['email']}")
     print(f"Created  : {'yes' if created else 'no'}")
     print(f"Updated  : {', '.join(changed) if changed else 'no changes'}")
+    print(f"Doctors  : {len(doctor_defaults)} seeded")
     print("")
     print("Next flow:")
     print("1. Log in as this Super Admin.")
